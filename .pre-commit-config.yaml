@@ -1,0 +1,20 @@
+default_stages: [pre-commit, pre-push]
+default_language_version:
+  python: python3
+minimum_pre_commit_version: '3.2.0'
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: detect-private-key          # SSH 개인 키 등 민감한 개인 키가 포함된 파일 커밋 방지
+      - id: end-of-file-fixer           # 파일 끝에 개행문자가 없을 경우 자동으로 추가, Git에서 diff가 깔끔하게 나오도록 도와줍니다.
+      - id: check-added-large-files     # 커밋에 500KB 이상 큰 파일이 포함되지 않도록 방지
+      - id: trailing-whitespace         # 코드 라인의 끝에 불필요한 공백을 자동으로 제거
+      - id: check-merge-conflict        # Git 충돌 마커가 들어간 채 커밋되는 걸 방지
+  # Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.1
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
