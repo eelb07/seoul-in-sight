@@ -1,0 +1,12 @@
+team1_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: dbt-dev-db
+      port: 5432
+      user: user
+      pass: pass
+      dbname: dbname
+      schema: analytics
+      threads: 1
