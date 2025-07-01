@@ -5,13 +5,13 @@ addReviewers: true
 addAssignees: author
 
 # A list of reviewers to be added to pull requests (GitHub user name)
-reviewers: 
+reviewers:
   - chowonseo
   - CHU4694
   - eelb07
   - pjy05079
 
-# A list of keywords to be skipped the process that add reviewers if pull requests include it 
+# A list of keywords to be skipped the process that add reviewers if pull requests include it
 skipKeywords:
   - wip
 
