@@ -5,8 +5,8 @@ team1_dbt:
       type: postgres
       host: dbt-dev-db
       port: 5432
-      user: user
-      pass: pass
-      dbname: dbname
+      user: "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_DATABASE') }}"
       schema: analytics
       threads: 1
