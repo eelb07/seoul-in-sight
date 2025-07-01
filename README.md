@@ -20,38 +20,36 @@
 
 2. 환경 설정
 
+    * Linux/Mac 사용자
+        ```bash
+        # 필요한 디렉토리 생성
+        mkdir -p ./dags ./logs ./plugins ./config ./team1_dbt ./team1_dbt/.dbt
+
+        # JWT 시크릿 키 생성 및 환경 변수 설정
+        echo -e "AIRFLOW_UID=$(id -u)\nJWT_SECRET=$(openssl rand -hex 32)\n_PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.9.6 dbt-redshift==1.9.5\nDBT_UESR=changeme\nDBT_PASSWORD=changeme\nDBT_DATABASE=changeme" > .env
+        ```
+
+    * Windows 사용자 (PowerShell)
+
+        ```powershell
+        # 필요한 디렉토리 생성
+        New-Item -ItemType Directory -Force -Path "./dags", "./logs", "./plugins", "./config", "./team1_dbt", "./team1_dbt/.dbt"
+
+        # JWT 시크릿 키 생성 및 환경 변수 설정
+        $AIRFLOW_UID = 1000
+        $JWT_SECRET = -join ((48..57) + (65..70) | Get-Random -Count 32 | % { [char]$_ })
+        "AIRFLOW_UID=1000`nJWT_SECRET=$JWT_SECRET`n_PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.9.6 dbt-redshift==1.9.5`nDBT_USER=changeme`nDBT_PASSWORD=changeme`nDBT_DATABASE=changeme" | Out-File -FilePath .env -Encoding utf8
+        ```
+
     ```bash
-    # 필요한 디렉토리 생성
-    mkdir -p ./dags ./logs ./plugins ./config ./team1_dbt ./team1_dbt/.dbt
-
-    # JWT 시크릿 키 생성 및 환경 변수 설정
-    echo -e "AIRFLOW_UID=$(id -u)\nJWT_SECRET=$(openssl rand -hex 32)\n_PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.9.6 dbt-redshift==1.9.5\nDBT_UESR=changeme\nDBT_PASSWORD=changeme\nDBT_DATABASE=changeme" > .env
+    # .env 파일 수정
+    vi .env
     ```
 
-    > Windows
-
-    ```powershell
-    # 필요한 디렉토리 생성
-    New-Item -ItemType Directory -Force -Path "./dags", "./logs", "./plugins", "./config", "./team1_dbt", "./team1_dbt/.dbt"
-
-    # JWT 시크릿 키 생성 및 환경 변수 설정
-    $AIRFLOW_UID = 1000
-    $JWT_SECRET = -join ((48..57) + (65..70) | Get-Random -Count 32 | % { [char]$_ })
-    "AIRFLOW_UID=1000`nJWT_SECRET=$JWT_SECRET`n_PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.9.6 dbt-redshift==1.9.5`nDBT_USER=changeme`nDBT_PASSWORD=changeme`nDBT_DATABASE=changeme" | Out-File -FilePath .env -Encoding utf8
     ```
-
-    ```bash
-    # docker-compose.yaml 파일 수정
-    vim docker-compose.yaml
-    ```
-
-    `docker-compose.yml`에서 다음 설정을 확인/수정하세요
-
-    ```yaml
-    environment:
-        &airflow-common-env
-        AIRFLOW__CORE__LOAD_EXAMPLES: 'false'  # 예제 DAG 비활성화
-        AIRFLOW__API_AUTH__JWT_SECRET: ${JWT_SECRET}  # JWT 인증을 위한 시크릿 키
+    DBT_USER=원하는 user명
+    DBT_PASSWORD=원하는 password
+    DBT_DATABASE=원하는 DB
     ```
 
 3. Airflow 초기화
@@ -74,19 +72,8 @@
     * 기본 비밀번호: `airflow`
 
 6. DBT 관련
+
     DBT는 Airflow worker 내 설치되어 로컬 개발환경에서는 PostgreSQL을, 운영 환경에서는 Redshift를 대상으로 DBT를 실행합니다.
-
-    생성된 `.env` 파일에 아래 항목을 수정합니다.
-
-    - DBT_USER=`원하는 USER명`
-    - DBT_PASSWORD=`원하는 Password`
-    - DBT_DATABASE=`원하는 Database명`
-
-    또한 `team1_dbt/.dbt/profiles.yml` 파일을 생성하셔서 (profiles.template.yml copy) db 접속 정보를 바꾸어 줍니다.
-
-    - dbname: DBT_DATABASE값
-    - user: DBT_USER값
-    - pass: DBT_PASSWORD값
 
     운영환경에서는 Redshift를 사용할 예정이며, `target: prod` 설정으로 분기 처리 가능합니다. (추후 설정)
 
