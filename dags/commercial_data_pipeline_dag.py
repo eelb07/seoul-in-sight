@@ -146,7 +146,7 @@ def commercial_data_pipeline():
                 })
 
         # S3에서 기존 처리 이력 로드
-        processed_history_s3_key = f"{S3_PROCESSED_HISTORY_PREFIX}/processed_observations.json"
+        processed_history_s3_key = f"{S3_PROCESSED_HISTORY_PREFIX}/commercial.json"
         processed_observed_at_set = set()
         processed_observed_at_dict = {}
         try:
