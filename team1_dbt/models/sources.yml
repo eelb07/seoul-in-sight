@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw_commercial_data 
+    schema: source           
+
+    tables:
+      - name: commercial     
+        identifier: source_commercial 
+        loaded_at_field: created_at 
+      - name: commercial_rsb  
+        identifier: source_commercial_rsb
+        loaded_at_field: created_at 
