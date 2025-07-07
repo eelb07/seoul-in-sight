@@ -28,7 +28,7 @@ WITH stg_commercial_rsb_data AS (
 final_fact AS (
     SELECT
         s.source_id AS fact_commercial_id,
-        s.commercial_id AS fact_commercial_rsb_id, 
+        {{ dbt_utils.generate_surrogate_key(['s.commercial_id', 's.source_id']) }}::VARCHAR(64) AS fact_commercial_rsb_id,
         s.category_congestion_level::VARCHAR(20) AS category_congestion_level,
         s.category_payment_count::INT AS category_payment_count,
         s.category_payment_min::INT AS category_payment_min, 
