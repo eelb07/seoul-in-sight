@@ -28,6 +28,15 @@ REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
 
 DBT_PROJECT_DIR = '/opt/airflow/team1_dbt'
 
+
+# 필수 변수 검증
+required_vars = [
+    BUCKET_NAME, S3_PREFIX, S3_PQ_PREFIX_COMM, 
+    S3_PQ_PREFIX_RSB, S3_PROCESSED_HISTORY_PREFIX, REDSHIFT_IAM_ROLE
+]
+if not all(required_vars):
+    raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
+
 log = logging.getLogger(__name__)
 
 # --- 헬퍼 함수 ---
@@ -128,7 +137,7 @@ def commercial_data_pipeline():
         S3에서 원시 상권 데이터를 추출하고 변환하며, S3의 이력 파일을 기반으로
         이미 처리된 레코드를 필터링합니다.
         """
-        process_start_time = pendulum.datetime(2025, 7, 3, 0, 20, tz="Asia/Seoul")
+        process_start_time = pendulum.now("Asia/Seoul")
         start_time_for_files = process_start_time.subtract(minutes=5)
         log.info(f"🔔{start_time_for_files} ~ {process_start_time} 사이의 raw_json 처리를 시작합니다.")
 
