@@ -132,15 +132,18 @@ default_args = {
 def commercial_data_pipeline():
 
     @task(task_id="extract_and_transform")
-    def extract_and_transform(s3_client):
+    def extract_and_transform(s3_client,  **context):
         """
         S3에서 원시 상권 데이터를 추출하고 변환하며, S3의 이력 파일을 기반으로
         이미 처리된 레코드를 필터링합니다.
         """
-        process_start_time = pendulum.now("Asia/Seoul")
-        start_time_for_files = process_start_time.subtract(minutes=5)
-        log.info(f"🔔{start_time_for_files} ~ {process_start_time} 사이의 raw_json 처리를 시작합니다.")
+        # logical_date는 UTC 기준이므로, 서울 시간으로 변환
+        process_start_time_utc = context['logical_date']
+        process_start_time_kst = process_start_time_utc.in_timezone("Asia/Seoul")
+        start_time_for_files = process_start_time_kst.subtract(minutes=5)
+        log.info(f"🔔{start_time_for_files} ~ {process_start_time_kst} 사이의 raw_json 처리를 시작합니다.")
 
+        
         # 처리해야 할 전체 파일 경로 정의
         files_to_process = []
         for i in range(5):
