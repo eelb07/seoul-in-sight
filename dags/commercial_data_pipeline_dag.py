@@ -143,19 +143,40 @@ def commercial_data_pipeline():
         start_time_for_files = process_start_time_kst.subtract(minutes=5)
         log.info(f"🔔{start_time_for_files} ~ {process_start_time_kst} 사이의 raw_json 처리를 시작합니다.")
 
-        
+
         # 처리해야 할 전체 파일 경로 정의
         files_to_process = []
-        for i in range(5):
-            file_time = start_time_for_files.add(minutes=i)
-            file_time_HHmm = file_time.strftime("%H%M")
 
-            for area_id in range(82):
-                files_to_process.append({
-                    'file_time': file_time,
-                    'area_id': area_id,
-                    'file_name': f"{file_time_HHmm}_{area_id}.json"
-                })
+        # 현재 logical_date_kst를 기준으로 5분 전까지의 파일들을 조회 (과거 5분 구간)
+        # 예: logical_date_kst가 00:05이면, 00:00, 00:01, 00:02, 00:03, 00:04 의 파일
+        # 즉, HHmm 부분의 첫 두 자리(시간)가 일치하고, 끝 두 자리(분)가 00-04, 05-09 등의 구간에 속하는 경우.
+        for i in range(5):
+            curr_minute_to_check = process_start_time_kst.subtract(minutes=(5 - i))
+
+            s3_prefix_date_path = curr_minute_to_check.strftime("%Y%m%d")
+            s3_prefix_time_name = curr_minute_to_check.strftime("%H%M")  
+            # 최종 S3 접두사: raw_json_data/20250708/0000_
+            full_s3_prefix = f"{S3_PREFIX}/{s3_prefix_date_path}/{s3_prefix_time_name}_"
+
+            response = s3_client.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=full_s3_prefix
+            )
+
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    file_key = obj['Key']
+
+                    # 파일 이름 파싱 (예: 0000_1.json -> 0000, 1)
+                    # 접두사 이후의 경로에서 파일명만 추출
+                    file_name_with_ext = file_key.split('/')[-1] # 0000_1.json
+                    parts = file_name_with_ext.replace('.json', '').split('_')
+                    area_id = int(parts[1])
+                    files_to_process.append({
+                        'file_time': curr_minute_to_check,
+                        'area_id': area_id,
+                        'file_name': f"{s3_prefix_time_name}_{area_id}.json"
+                    })
 
         # S3에서 기존 처리 이력 로드
         processed_history_s3_key = f"{S3_PROCESSED_HISTORY_PREFIX}/commercial.json"
@@ -273,6 +294,8 @@ def commercial_data_pipeline():
             'source_commercial_rsb_data': source_commercial_rsb_data,
             'processed_observed_at_dict': processed_observed_at_dict
         }
+
+
 
     @task(task_id="upload_parquet")
     def upload_parquet_to_s3(data_dict: dict, s3_client):
