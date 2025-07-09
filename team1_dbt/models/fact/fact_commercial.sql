@@ -54,10 +54,8 @@ final_fact AS (
         age_60s_ratio::DECIMAL(5,2) AS age_60s_ratio,
         individual_consumer_ratio::DECIMAL(5,2) AS individual_consumer_ratio,
         corporate_consumer_ratio::DECIMAL(5,2) AS corporate_consumer_ratio,
-        
         area_code  AS area_id, 
-
-        GETDATE() AS created_at
+        CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul' AS created_at
     FROM stg_commercial_data
 )
 
