@@ -53,7 +53,7 @@ def generate_source_id(area_code: str, observed_at: str) -> str:
         str: 32자 SHA256 해시.
     """
     raw = f"{area_code}_{observed_at}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:32] # 32자리 고정 길이
+    return hashlib.md5(raw.encode()).hexdigest()
 
 def parse_int(val):
     """
