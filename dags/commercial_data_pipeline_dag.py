@@ -139,6 +139,8 @@ def commercial_data_pipeline():
         """
         # logical_date는 UTC 기준이므로, 서울 시간으로 변환
         process_start_time_utc = context['logical_date']
+
+
         process_start_time_kst = process_start_time_utc.in_timezone("Asia/Seoul")
         start_time_for_files = process_start_time_kst.subtract(minutes=5)
         log.info(f"🔔{start_time_for_files} ~ {process_start_time_kst} 사이의 raw_json 처리를 시작합니다.")
@@ -395,11 +397,11 @@ def commercial_data_pipeline():
                 Body=buffer_commercial.getvalue(),
                 ContentType='application/octet-stream'
             )
-            print(f"🔔 상권 데이터를 저장 완료했습니다. : s3://{BUCKET_NAME}/{s3_key_commercial}")
+            log.info(f"🔔 상권 데이터를 저장 완료했습니다. : s3://{BUCKET_NAME}/{s3_key_commercial}")
             saved_parquet_paths['commercial_parquet_path'] = f"s3://{BUCKET_NAME}/{s3_key_commercial}"
 
         else:
-            print("🚨 처리할 상권 일반 데이터가 없습니다.")
+            log.error("🚨 처리할 상권 일반 데이터가 없습니다.")
 
 
         if commercial_rsb_data:
@@ -464,10 +466,10 @@ def commercial_data_pipeline():
                 Body=buffer_rsb.getvalue(),
                 ContentType='application/octet-stream'
             )
-            print(f"🔔 상권 카테고리별 데이터를 저장 완료했습니다. : s3://{BUCKET_NAME}/{s3_key_rsb}")
+            log.info(f"🔔 상권 카테고리별 데이터를 저장 완료했습니다. : s3://{BUCKET_NAME}/{s3_key_rsb}")
             saved_parquet_paths['rsb_parquet_path'] = f"s3://{BUCKET_NAME}/{s3_key_rsb}"
         else:
-            print("🚨 처리할 상권 RSB 데이터가 없습니다.")
+            log.info("🚨 처리할 상권 RSB 데이터가 없습니다.")
 
         processed_history_s3_key = f"{S3_PROCESSED_HISTORY_PREFIX}/commercial.json"
         try:
@@ -478,7 +480,7 @@ def commercial_data_pipeline():
                 processed_history_data=data_dict['processed_observed_at_dict']
             )
         except Exception as e:
-            print(f"❌ 최종 처리 이력 업로드 중 오류 발생: {e}")
+            log.error(f"❌ 최종 처리 이력 업로드 중 오류 발생: {e}")
             raise
 
         return {
@@ -497,7 +499,7 @@ def commercial_data_pipeline():
         rsb_parquet_path = s3_parquet_paths.get('rsb_parquet_path')
 
         if not commercial_parquet_path and not rsb_parquet_path:
-            print("🚨 Redshift로 로드할 Parquet 파일 경로가 없습니다.")
+            log.error("🚨 Redshift로 로드할 Parquet 파일 경로가 없습니다.")
             return
 
         conn = None
@@ -517,7 +519,7 @@ def commercial_data_pipeline():
             with conn.cursor() as cur:
                 if commercial_parquet_path:
                     commercial_table_name = "source.source_commercial"
-                    print(f"🔄 Redshift 테이블 '{commercial_table_name}'에 데이터 로드 시작...")
+                    log.info(f"🔄 Redshift 테이블 '{commercial_table_name}'에 데이터 로드 시작...")
 
                     copy_commercial_sql = f"""
                     COPY {commercial_table_name} (
@@ -533,11 +535,11 @@ def commercial_data_pipeline():
                     FORMAT AS PARQUET;
                     """
                     cur.execute(copy_commercial_sql)
-                    print(f"✅ 상권 데이터가 Redshift 테이블 '{commercial_table_name}'에 성공적으로 로드되었습니다.")
+                    log.info(f"✅ 상권 데이터가 Redshift 테이블 '{commercial_table_name}'에 성공적으로 로드되었습니다.")
 
                 if rsb_parquet_path:
                     rsb_table_name = "source.source_commercial_rsb"
-                    print(f"🔄 Redshift 테이블 '{rsb_table_name}'에 데이터 로드 시작...")
+                    log.info(f"🔄 Redshift 테이블 '{rsb_table_name}'에 데이터 로드 시작...")
                     copy_rsb_sql = f"""
                     COPY {rsb_table_name} (
                         source_id, category_large, category_medium, category_congestion_level,
@@ -549,15 +551,15 @@ def commercial_data_pipeline():
                     FORMAT AS PARQUET;
                     """
                     cur.execute(copy_rsb_sql)
-                    print(f"✅ 상권 카테고리별 데이터가 Redshift 테이블 '{rsb_table_name}'에 성공적으로 로드되었습니다.")
+                    log.info(f"✅ 상권 카테고리별 데이터가 Redshift 테이블 '{rsb_table_name}'에 성공적으로 로드되었습니다.")
 
         except Exception as e:
-            print(f"❌ Redshift에 데이터 로드 중 오류 발생: {e}")
+            log.error(f"❌ Redshift에 데이터 로드 중 오류 발생: {e}")
             raise
         finally:
             if conn:
                 conn.close()
-                print("🗄️ Redshift 연결이 닫혔습니다.")
+                log.info("🗄️ Redshift 연결이 닫혔습니다.")
 
     @task(task_id="run_dbt_models")
     def run_dbt_command(command_args: str):
