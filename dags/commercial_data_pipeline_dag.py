@@ -19,6 +19,7 @@ from airflow.models import Variable
 from airflow.hooks.base import BaseHook
 from airflow.operators.bash import BashOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.amazon.aws.hooks.redshift_sql import RedshiftSQLHook
 
 # --- 설정 변수 ---
 BUCKET_NAME = Variable.get("BUCKET_NAME")
@@ -488,7 +489,6 @@ def commercial_data_pipeline():
             's3_parquet_paths': saved_parquet_paths
         }
 
-
     @task(task_id="load_to_redshift")
     def load_to_redshift(saved):
         """
@@ -504,62 +504,49 @@ def commercial_data_pipeline():
 
         conn = None
         try:
-            # Airflow Connection에서 Redshift 연결 정보 가져오기
-            conn_obj = BaseHook.get_connection("redshift_conn_id")
-            conn = psycopg2.connect(
-                dbname=conn_obj.schema,
-                user=conn_obj.login,
-                password=conn_obj.password,
-                host=conn_obj.host,
-                port=int(conn_obj.port)
-            )
-            conn.autocommit = True
-            log.info("Redshift에 성공적으로 연결되었습니다.")
+            redshift_hook = RedshiftSQLHook(redshift_conn_id="redshift_conn_id")
+            log.info("Redshift Hook 초기화 완료.")
 
-            with conn.cursor() as cur:
-                if commercial_parquet_path:
-                    commercial_table_name = "source.source_commercial"
-                    log.info(f"🔄 Redshift 테이블 '{commercial_table_name}'에 데이터 로드 시작...")
+            if commercial_parquet_path:
+                commercial_table_name = "source.source_commercial"
+                log.info(f"🔄 Redshift 테이블 '{commercial_table_name}'에 데이터 로드를 시작합니다.")
 
-                    copy_commercial_sql = f"""
-                    COPY {commercial_table_name} (
-                        source_id, area_code, area_name, congestion_level,
-                        total_payment_count, payment_amount_min, payment_amount_max,
-                        male_ratio, female_ratio, age_10s_ratio, age_20s_ratio,
-                        age_30s_ratio, age_40s_ratio, age_50s_ratio, age_60s_ratio,
-                        individual_consumer_ratio, corporate_consumer_ratio,
-                        observed_at, created_at
-                    )
-                    FROM '{commercial_parquet_path}'
-                    IAM_ROLE '{REDSHIFT_IAM_ROLE}'
-                    FORMAT AS PARQUET;
-                    """
-                    cur.execute(copy_commercial_sql)
-                    log.info(f"✅ 상권 데이터가 Redshift 테이블 '{commercial_table_name}'에 성공적으로 로드되었습니다.")
+                copy_commercial_sql = f"""
+                COPY {commercial_table_name} (
+                    source_id, area_code, area_name, congestion_level,
+                    total_payment_count, payment_amount_min, payment_amount_max,
+                    male_ratio, female_ratio, age_10s_ratio, age_20s_ratio,
+                    age_30s_ratio, age_40s_ratio, age_50s_ratio, age_60s_ratio,
+                    individual_consumer_ratio, corporate_consumer_ratio,
+                    observed_at, created_at
+                )
+                FROM '{commercial_parquet_path}'
+                IAM_ROLE '{REDSHIFT_IAM_ROLE}'
+                FORMAT AS PARQUET;
+                """
+                redshift_hook.run(copy_commercial_sql) 
+                log.info(f"✅ 상권 데이터가 Redshift 테이블 '{commercial_table_name}'에 성공적으로 로드되었습니다.")
 
-                if rsb_parquet_path:
-                    rsb_table_name = "source.source_commercial_rsb"
-                    log.info(f"🔄 Redshift 테이블 '{rsb_table_name}'에 데이터 로드 시작...")
-                    copy_rsb_sql = f"""
-                    COPY {rsb_table_name} (
-                        source_id, category_large, category_medium, category_congestion_level,
-                        category_payment_count, category_payment_min, category_payment_max,
-                        merchant_count, merchant_basis_month, observed_at, created_at
-                    )
-                    FROM '{rsb_parquet_path}'
-                    IAM_ROLE '{REDSHIFT_IAM_ROLE}'
-                    FORMAT AS PARQUET;
-                    """
-                    cur.execute(copy_rsb_sql)
-                    log.info(f"✅ 상권 카테고리별 데이터가 Redshift 테이블 '{rsb_table_name}'에 성공적으로 로드되었습니다.")
+            if rsb_parquet_path:
+                rsb_table_name = "source.source_commercial_rsb"
+                log.info(f"🔄 Redshift 테이블 '{rsb_table_name}'에 데이터 로드 시작를 시작합니다.")
+                copy_rsb_sql = f"""
+                COPY {rsb_table_name} (
+                    source_id, category_large, category_medium, category_congestion_level,
+                    category_payment_count, category_payment_min, category_payment_max,
+                    merchant_count, merchant_basis_month, observed_at, created_at
+                )
+                FROM '{rsb_parquet_path}'
+                IAM_ROLE '{REDSHIFT_IAM_ROLE}'
+                FORMAT AS PARQUET;
+                """
+                redshift_hook.run(copy_rsb_sql)
+                log.info(f"✅ 상권 카테고리별 데이터가 Redshift 테이블 '{rsb_table_name}'에 성공적으로 로드되었습니다.")
 
         except Exception as e:
-            log.error(f"❌ Redshift에 데이터 로드 중 오류 발생: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
-                log.info("🗄️ Redshift 연결이 닫혔습니다.")
+            log.error(f"❌ Redshift에 데이터 로드 중 오류 발생 (RedshiftSQLHook): {e}")
+            raise 
+
 
     run_dbt = BashOperator(
         task_id="run_dbt_command",
