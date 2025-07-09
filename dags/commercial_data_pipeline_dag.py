@@ -18,7 +18,7 @@ from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.hooks.base import BaseHook
 from airflow.operators.bash import BashOperator
-
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 # --- 설정 변수 ---
 BUCKET_NAME = Variable.get("BUCKET_NAME")
@@ -570,23 +570,18 @@ def commercial_data_pipeline():
     # S3 클라이언트 초기화
     s3 = None
     try:
-        conn = BaseHook.get_connection("aws_default")
-        session = boto3.Session(
-            aws_access_key_id=conn.login,
-            aws_secret_access_key=conn.password,
-            region_name=json.loads(conn.extra)["region_name"]
-        )
-        s3 = session.client("s3")
+        s3_hook = S3Hook(aws_conn_id="aws_default")
+        s3_client = s3_hook.get_conn()
         logging.info("S3 클라이언트 초기화 완료.")
     except Exception as e:
         logging.critical(f"S3 클라이언트 초기화 실패: {e}")
         return 
 
     # 데이터 추출 및 전처리
-    extracted_data = extract_and_transform(s3_client=s3)
+    extracted_data = extract_and_transform(s3_client=s3_client)
 
     # Parquet으로 S3에 업로드
-    saved_paths = upload_parquet_to_s3(extracted_data, s3)
+    saved_paths = upload_parquet_to_s3(extracted_data, s3_client)
 
     # Redshift Source 테이블로 로드
     redshift_load_status = load_to_redshift(saved_paths) 
