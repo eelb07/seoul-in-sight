@@ -116,7 +116,7 @@ default_args = {
 }
 
 @dag(
-    dag_id="dag_commercial_v1.0.0",
+    dag_id="dag_commercial",
     schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 2, tz="Asia/Seoul"),
     catchup=False,
@@ -300,8 +300,8 @@ def commercial_data_pipeline():
 
 
 
-    @task(task_id="upload_parquet")
-    def upload_parquet_to_s3(data_dict: dict, s3_client):
+    @task(task_id="load_to_s3")
+    def load_to_s3(data_dict: dict, s3_client):
         """
         처리된 상권 데이터와 RSB 데이터를 Parquet 파일로 S3에 업로드합니다.
         """
@@ -568,7 +568,7 @@ def commercial_data_pipeline():
     extracted_data = extract_and_transform(s3_client=s3_client)
 
     # Parquet으로 S3에 업로드
-    saved_paths = upload_parquet_to_s3(extracted_data, s3_client)
+    saved_paths = load_to_s3(extracted_data, s3_client)
 
     # Redshift Source 테이블로 로드
     redshift_load_status = load_to_redshift(saved_paths) 
