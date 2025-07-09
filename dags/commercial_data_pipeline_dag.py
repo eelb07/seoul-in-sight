@@ -17,6 +17,8 @@ import psycopg2
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.hooks.base import BaseHook
+from airflow.operators.bash import BashOperator
+
 
 # --- 설정 변수 ---
 BUCKET_NAME = Variable.get("BUCKET_NAME")
@@ -25,14 +27,12 @@ S3_PQ_PREFIX_COMM = Variable.get("S3_PQ_PREFIX_COMM")
 S3_PQ_PREFIX_RSB = Variable.get("S3_PQ_PREFIX_RSB")
 S3_PROCESSED_HISTORY_PREFIX = Variable.get("S3_PROCESSED_HISTORY_PREFIX")
 REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
-
-DBT_PROJECT_DIR = '/opt/airflow/team1_dbt'
-
+DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 # 필수 변수 검증
 required_vars = [
     BUCKET_NAME, S3_PREFIX, S3_PQ_PREFIX_COMM, 
-    S3_PQ_PREFIX_RSB, S3_PROCESSED_HISTORY_PREFIX, REDSHIFT_IAM_ROLE
+    S3_PQ_PREFIX_RSB, S3_PROCESSED_HISTORY_PREFIX, REDSHIFT_IAM_ROLE, DBT_PROJECT_DIR
 ]
 if not all(required_vars):
     raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
@@ -561,36 +561,10 @@ def commercial_data_pipeline():
                 conn.close()
                 log.info("🗄️ Redshift 연결이 닫혔습니다.")
 
-    @task(task_id="run_dbt_models")
-    def run_dbt_command(command_args: str):
-        """
-        dbt 명령어를 실행하는 Airflow 태스크.
-        지정된 dbt 프로젝트 디렉토리로 이동하여 명령어를 실행합니다.
-        """
-        original_cwd = os.getcwd() # 현재 작업 디렉토리 저장
-        try:
-            os.chdir(DBT_PROJECT_DIR) # dbt 프로젝트 디렉토리로 이동
-
-            dbt_command = ['dbt'] + command_args.split()
-
-            log.info(f"🚀 dbt command 실행: {' '.join(dbt_command)}")
-            process = subprocess.run(dbt_command, capture_output=True, text=True, check=True)
-
-            log.info("dbt stdout:")
-            log.info(process.stdout)
-            if process.stderr:
-                log.warning("dbt stderr:")
-                log.warning(process.stderr)
-
-            return process.stdout
-
-        except subprocess.CalledProcessError as e:
-            log.error(f"❌ dbt command 실패: {e}")
-            log.error(f"stdout: {e.stdout}")
-            log.error(f"stderr: {e.stderr}")
-            raise
-        finally:
-            os.chdir(original_cwd) # 원래 작업 디렉토리로 돌아옴
+    run_dbt = BashOperator(
+        task_id="run_dbt_command",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
+    )
 
 
     # S3 클라이언트 초기화
@@ -617,10 +591,7 @@ def commercial_data_pipeline():
     # Redshift Source 테이블로 로드
     redshift_load_status = load_to_redshift(saved_paths) 
 
-    # Redshift 로드 완료 후 dbt 모델 실행
-    dbt_run_status = run_dbt_command(command_args='run')
-
     # 태스크 의존성 설정
-    extracted_data >> saved_paths >> redshift_load_status >> dbt_run_status
+    extracted_data >> saved_paths >> redshift_load_status >> run_dbt
 
 commercial_pipeline_dag = commercial_data_pipeline()
