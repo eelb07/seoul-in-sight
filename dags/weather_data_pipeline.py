@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 import pendulum
 from airflow.decorators import dag, task
+from airflow.operators.bash import BashOperator
 from airflow.models.variable import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.hooks.redshift_sql import RedshiftSQLHook
@@ -19,6 +20,8 @@ EXTRACTED_PREFIX = Variable.get("S3_WEATHER_EXTRACTED_PREFIX")
 PROCESSED_PREFIX = Variable.get("S3_WEATHER_PROCESSED_PREFIX")
 IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
 REDSHIFT_TABLE = "source.source_weather"
+DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
+DBT_PROFILES_DIR = Variable.get("DBT_PROFILES_DIR")
 
 
 def _parse_int(value) -> Optional[int]:
@@ -289,10 +292,15 @@ def weather_data_pipeline():
         redshift.run("COMMIT")
         logger.info(f"Deleted and reloaded data between {start_kst} and {end_kst}")
 
+    run_dbt = BashOperator(
+        task_id="run_dbt",
+        bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select fact_weather",
+    )
+
     # DAG 실행 흐름
     extracted_key = extract()
     parquet_key = transform(extracted_key)
-    load_to_redshift(parquet_key)
+    load_to_redshift(parquet_key) >> run_dbt
 
 
 weather_data_pipeline()
