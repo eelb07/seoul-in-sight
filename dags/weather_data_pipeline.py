@@ -88,24 +88,10 @@ def weather_data_pipeline():
         start_kst = kst_time.subtract(minutes=10)
 
         # 10분 내 모든 1분 단위 prefix 생성
-        prefixes = (
-            [
-                f"{SOURCE_PREFIX}/{start_kst.add(minutes=i).format('YYYYMMDD/HHmm')}"
-                for i in range(10)
-            ]
-            if start_kst.day == kst_time.day
-            else [
-                # 자정 넘는 경우 (23:50~00:00)
-                *[
-                    f"{SOURCE_PREFIX}/{start_kst.add(minutes=i).format('YYYYMMDD/HHmm')}"
-                    for i in range(10 - kst_time.minute)
-                ],
-                *[
-                    f"{SOURCE_PREFIX}/{kst_time.start_of('hour').add(minutes=i).format('YYYYMMDD/HHmm')}"
-                    for i in range(kst_time.minute)
-                ],
-            ]
-        )
+        prefixes = [
+            f"{SOURCE_PREFIX}/{start_kst.add(minutes=i).format('YYYYMMDD/HHmm')}"
+            for i in range(10)
+        ]
 
         # 각 1분 prefix별로 처리
         s3_hook = S3Hook(aws_conn_id="aws_default")
