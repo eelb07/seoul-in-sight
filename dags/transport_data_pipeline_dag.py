@@ -4,6 +4,8 @@ from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.operators.bash import BashOperator
+
 
 import datetime
 import pendulum
@@ -15,21 +17,16 @@ import pandas as pd
 log = logging.getLogger(__name__)
 BUCKET_NAME = Variable.get("BUCKET_NAME")
 S3_PREFIX = Variable.get("S3_PREFIX")
-# S3_PQ_PREFIX_BUS = Variable.get("S3_PQ_PREFIX_BUS")
-# S3_PQ_PREFIX_SUBWAY = Variable.get("S3_PQ_PREFIX_SUBWAY")
-IAM_ROLE = Variable.get("IAM_ROLE")
+REDSHIFT_IAM_ROLE_ARN = Variable.get("REDSHIFT_IAM_ROLE_ARN")
+DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
+
 TARGET_TABLE_BUS = "source.source_bus"
 TARGET_TABLE_SUBWAY = "source.source_subway"
 REDSHIFT_CONN_ID = "redshift_dev_db"
 
 
 # 필수 변수 검증
-required_vars = [
-    BUCKET_NAME,
-    S3_PREFIX,
-    IAM_ROLE,
-    # , S3_PQ_PREFIX_BUS, S3_PQ_PREFIX_SUBWAY
-]
+required_vars = [BUCKET_NAME, S3_PREFIX, REDSHIFT_IAM_ROLE_ARN, DBT_PROJECT_DIR]
 if not all(required_vars):
     raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
 
@@ -262,7 +259,7 @@ def transport_data_pipeline():
                 created_at, observed_at
             )
             FROM '{S3_BUS_PATH}'
-            IAM_ROLE '{IAM_ROLE}'
+            IAM_ROLE '{REDSHIFT_IAM_ROLE_ARN}'
             FORMAT AS PARQUET;
         """
 
@@ -281,7 +278,7 @@ def transport_data_pipeline():
                 created_at, observed_at
             )
             FROM '{S3_SUBWAY_PATH}'
-            IAM_ROLE '{IAM_ROLE}'
+            IAM_ROLE '{REDSHIFT_IAM_ROLE_ARN}'
             FORMAT AS PARQUET;
         """
 
@@ -291,7 +288,13 @@ def transport_data_pipeline():
 
         print("✅ Redshift COPY 완료!")
 
-    extract_and_transform() >> load_to_redshift()
+    run_dbt = BashOperator(
+        task_id="run_dbt",
+        # bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select fact_transport",
+        bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --select fact_transport",
+    )
+
+    extract_and_transform() >> load_to_redshift() >> run_dbt
 
 
 dag_instance = transport_data_pipeline()
