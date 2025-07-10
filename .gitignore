@@ -197,3 +197,4 @@ airflow.cfg
 profiles.yml
 .user.yml
 logs/
+team1_dbt/dbt_packages/
