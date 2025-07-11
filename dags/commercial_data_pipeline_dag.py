@@ -3,16 +3,12 @@ import hashlib
 import json
 from io import BytesIO
 import decimal
-import os
-import subprocess
 
 import pendulum
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import boto3
 import botocore.exceptions
-import psycopg2
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
