@@ -21,3 +21,5 @@ sources:
     tables:
       - name: category
         identifier: dim_category 
+      - name: area
+        identifier: dim_area
