@@ -4,40 +4,43 @@ import pandas as pd
 import pendulum
 import botocore.exceptions
 import io
+import textwrap
+
 from typing import List
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.amazon.aws.transfers.s3_to_redshift import S3ToRedshiftOperator
+from airflow.providers.amazon.aws.hooks.redshift_sql import RedshiftSQLHook
 from airflow.operators.bash import BashOperator
 
 logger = logging.getLogger()
 S3_BUCKET_NAME = "de6-team1-bucket"
 DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 DBT_PROFILES_DIR = Variable.get("DBT_PROFILES_DIR")
+REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE")
 
 
 def get_s3_client(conn_id="aws_conn_id"):
+    """airflow에 등록된 aws_conn_id를 사용하여 S3 클라이언트 반환"""
     s3_hook = S3Hook(aws_conn_id=conn_id)
     return s3_hook.get_conn()
 
 
 def read_from_s3(bucket_name: str, key: str, conn_id="aws_conn_id"):
+    """지정한 S3 버킷과 키에 해당하는 객체를 문자열로 반환"""
     s3 = get_s3_client(conn_id)
     response = s3.get_object(Bucket=bucket_name, Key=key)
     return response["Body"].read().decode("utf-8")
 
 
-def upload_to_s3(bucket_name: str, key: str, data, conn_id="aws_conn_id"):
-    s3 = get_s3_client(conn_id)
-    s3.put_object(Bucket=bucket_name, Key=key, Body=data)
+"""처리된 observed_at 값이 기록된 s3_key(population.json)에 processed_history_data 업데이트"""
 
 
 def upload_processed_history_to_s3(
     s3_client,
     bucket_name: str,
     s3_key: str,
-    processed_history_data: dict,  # 업로드할 processed_observed_at_dict 데이터
+    processed_history_data: dict,  # area_code 별로 처리된 observed_at 값 목록을 담은 딕셔너리
 ):
     updated_content_json_string = json.dumps(
         processed_history_data, indent=4, ensure_ascii=False
@@ -62,20 +65,30 @@ def upload_processed_history_to_s3(
     dag_id="dag_population",
     schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 3, 0, 5, tz="Asia/Seoul"),
+    docs_md=textwrap.dedent("""
+        - **추출 및 변환**: S3에서 raw json 데이터를 추출, 변환하고 중복 처리
+        - **Parquet 업로드**: 처리된 데이터는 Parquet 파일로 S3에 업로드
+        - **Redshift 적재**: S3의 Parquet 파일을 Redshift 테이블에 적재
+    """),
     catchup=False,
-    tags=["s3", "parquet"],
+    tags=["population", "silver", "ETL"],
     default_args={"owner": "hyeonuk"},
 )
 def population_data_pipeline():
     @task
-    def extract_and_transform(**context) -> List[str]:
-        exec_date = context["logical_date"]
+    def extract_and_transform(**context) -> dict:
+        """
+        S3에 최근 5분 동안 수집된 raw json 데이터에서 인구 데이터 추출
+        - ex) logical_date가 20:10이면 20:05~09 사이에 수집된 raw json 탐색
+        """
+        logical_date = context["logical_date"]
 
-        process_start_time = exec_date
+        process_start_time = logical_date
 
         s3 = get_s3_client()
         files_to_process = []
 
+        # 5분 내의 생성된 데이터 prefix 생성 후 실제 존재하는 것만 가져옴
         for i in range(5):
             file_time = process_start_time.subtract(minutes=(5 - i))
 
@@ -83,9 +96,9 @@ def population_data_pipeline():
             s3_prefix_time_name = file_time.strftime("%H%M")
             full_s3_prefix = f"raw-json/{s3_prefix_date_path}/{s3_prefix_time_name}_"
 
-            respose = s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix=full_s3_prefix)
+            response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix=full_s3_prefix)
 
-            for obj in respose.get("Contents", []):
+            for obj in response.get("Contents", []):
                 file_key = obj["Key"]
 
                 try:
@@ -116,9 +129,9 @@ def population_data_pipeline():
                         }
                     )
 
-                    logger.info(
-                        f"[DEBUG] Found file: {file_key}, observed_at={observed_at}"
-                    )
+                    # logger.info(
+                    #     f"[DEBUG] Found file: {file_key}, observed_at={observed_at}"
+                    # )
 
                 except botocore.exceptions.ClientError as e:
                     if e.response["Error"]["Code"] == "NoSuchKey":
@@ -127,12 +140,14 @@ def population_data_pipeline():
                     else:
                         raise
 
-        processed_history_s3_key = "processed_history/population.json"
+        processed_history_s3_key = (
+            "processed_history/population.json"  # 처리 내역이 저장되는 키
+        )
         processed_observed_at_set = set()
         processed_observed_at_dict = {}
 
         try:
-            response = s3.get_object(
+            response = s3.get_object(  # 처리된 observed_at인지 판단하기 위해 population.json 로드
                 Bucket=S3_BUCKET_NAME, Key=processed_history_s3_key
             )
             processed_observed_at_dict = json.loads(response["Body"].read())
@@ -154,6 +169,7 @@ def population_data_pipeline():
             else:
                 raise
 
+        # 이전에 처리된 observed_at인지 판단
         def is_processed(area_id: int, observed_at: str) -> bool:
             return (area_id, observed_at) in processed_observed_at_set
 
@@ -186,6 +202,7 @@ def population_data_pipeline():
                     )
                     continue
 
+                # 처리된 이력이 있으면 스킵 없으면 추가
                 if is_processed(area_id=area_id, observed_at=observed_at):
                     logger.info(
                         f"⏭️ 이미 처리된 데이터 스킵: {file_name} (area_id: {area_id}, observed_at: {observed_at})"
@@ -208,11 +225,11 @@ def population_data_pipeline():
                         "population_max": int(
                             float(raw_population_data.get("AREA_PPLTN_MAX"))
                         ),
-                        "male_population_ratio": int(
-                            float(raw_population_data.get("MALE_PPLTN_RATE"))
+                        "male_population_ratio": float(
+                            raw_population_data.get("MALE_PPLTN_RATE")
                         ),
-                        "female_population_ratio": int(
-                            float(raw_population_data.get("FEMALE_PPLTN_RATE"))
+                        "female_population_ratio": float(
+                            raw_population_data.get("FEMALE_PPLTN_RATE")
                         ),
                         "age_0s_ratio": float(raw_population_data.get("PPLTN_RATE_0")),
                         "age_10s_ratio": float(
@@ -249,7 +266,7 @@ def population_data_pipeline():
                     }
                 )
 
-                # 처리 이력 추가
+                # 처리 이력(oberved_at) 추가
                 processed_observed_at_set.add((area_id, observed_at))
                 if str(area_id) not in processed_observed_at_dict:
                     processed_observed_at_dict[str(area_id)] = []
@@ -260,7 +277,7 @@ def population_data_pipeline():
                     }
                 )
 
-                logger.info(f"✅ {file_name} 변환 완료")
+                # logger.info(f"✅ {file_name} 변환 완료")
 
             except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "NoSuchKey":
@@ -276,6 +293,9 @@ def population_data_pipeline():
 
     @task
     def load_to_s3(result: dict):
+        """
+        이전 task에서 처리된 이력이 없는 데이터들은 Parquet으로 변환
+        """
         source_population_data = result.get("source_population_data", [])
 
         if not source_population_data:
@@ -330,7 +350,7 @@ def population_data_pipeline():
                 "resident_ratio": "float32",
                 "non_resident_ratio": "float32",
                 "is_replaced": "bool",
-                "observed_at": "datetime64[ns]",  # 또는 "datetime64[ns]" 도 가능
+                "observed_at": "datetime64[ns]",
                 "created_at": "datetime64[ns]",
             }
         )
@@ -340,6 +360,7 @@ def population_data_pipeline():
         df.to_parquet(buffer, index=False, engine="pyarrow")
         buffer.seek(0)
 
+        # 변환된 Parquet들을 S3에 저장
         s3 = get_s3_client()
         merged_key = f"processed-data/population/{pendulum.now('Asia/Seoul').format('YYYYMMDD_HHmm')}.parquet"
 
@@ -349,6 +370,7 @@ def population_data_pipeline():
             f"✅ population parquet 파일을 저장했습니다: s3://{S3_BUCKET_NAME}/{merged_key}"
         )
 
+        # 처리 어력 업데이트 후 S3에 덮어쓰기
         processed_history_s3_key = "processed_history/population.json"
         try:
             upload_processed_history_to_s3(
@@ -364,31 +386,38 @@ def population_data_pipeline():
         return merged_key
 
     @task
-    def load_to_redshift(merged_key: List[str]):  # 따로 copy task로
-        copy_task = S3ToRedshiftOperator(
-            task_id="load_merged_data_from_s3",
-            redshift_conn_id="redshift_dev_db",
-            aws_conn_id="aws_conn_id",
-            schema="source",
-            table="source_population",
-            copy_options=["FORMAT AS PARQUET"],
-            s3_bucket=S3_BUCKET_NAME,
-            s3_key=merged_key,
-        )
+    def load_to_redshift(merged_key: List[str]):
+        if not merged_key:
+            """
+            5분 사이 수집된 모든 json이 이미 처리됐으면 parquet으로 변환할 것이 없으므로 merged_key는 빈 리스트임
+            그러면 redshift 적재 시 copy_sql의 FROM 부분이 's3://{S3_BUCKET_NAME}'가 되므로 버킷의 모든 데이터를 redshift에 적재하려는 오류가 발생하므로 그 상황에 대비한 처리
+            """
+            logger.info(
+                "[load_to_redshift] 처리할 parquet 파일이 없어 적재를 스킵합니다."
+            )
+            return "SKIPPED"
 
-        return copy_task.execute({})
+        hook = RedshiftSQLHook(redshift_conn_id="redshift_dev_db")
+        source_table = "source.source_population"
+
+        copy_sql = f"""
+            COPY {source_table}
+            FROM 's3://{S3_BUCKET_NAME}/{merged_key}'
+            IAM_ROLE '{REDSHIFT_IAM_ROLE}'
+            FORMAT PARQUET;
+        """
+
+        hook.run(copy_sql)
 
     run_dbt = BashOperator(
         task_id="run_dbt",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select fact_population",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt deps && dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select fact_population",
     )
 
-    # dbt run task 추가
+    # DAG 순서 명시
     extract = extract_and_transform()
     merge = load_to_s3(extract)
-    load = load_to_redshift(merge)
-
-    extract >> merge >> load >> run_dbt
+    load_to_redshift(merge) >> run_dbt
 
 
 dag_instance = population_data_pipeline()
