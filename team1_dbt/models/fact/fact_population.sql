@@ -29,7 +29,7 @@ WITH stg_population AS (
         is_replaced,
         observed_at,
         created_at
-    FROM source.source_population
+    FROM {{ ref('stg_population') }}
 
     {% if is_incremental() %}
         WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
@@ -65,7 +65,7 @@ final_fact AS (
         sp.is_replaced,
         sp.observed_at,
         sp.created_at,
-        sp.area_code AS area_id,
+        CAST(da.area_id AS INT4) AS area_id,
         dc.congestion_id AS congestion_id,
         sp.time_key
 
@@ -74,6 +74,8 @@ final_fact AS (
         ON sp.congestion_label = dc.congestion_label
     LEFT JOIN dim.dim_time dt
         ON sp.time_key = dt.time_key
+	LEFT JOIN dim.dim_area da
+		ON sp.area_code = da.area_code
 )
 
 SELECT * FROM final_fact
