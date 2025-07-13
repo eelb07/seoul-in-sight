@@ -40,14 +40,14 @@ log = logging.getLogger(__name__)
 
 def generate_source_id(area_code: str, observed_at: str) -> str:
     """
-    고정 길이 SHA256 해시를 소스 ID로 생성합니다.
+    고정 길이 MD5 해시를 소스 ID로 생성합니다.
 
     Args:
         area_code (str): 지역 코드.
         observed_at (str): 관측 시간.
 
     Returns:
-        str: 32자 SHA256 해시.
+        str: 32자 MD5 해시 문자열.
     """
     raw = f"{area_code}_{observed_at}"
     return hashlib.md5(raw.encode()).hexdigest()
