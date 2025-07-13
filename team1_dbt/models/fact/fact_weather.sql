@@ -64,10 +64,15 @@ fact AS (
         air_quality_message,
         sunrise,
         sunset,
-        area_code  AS area_id,
+        dc.area_id::SMALLINT AS area_id,
         CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul' AS created_at,
         TO_CHAR(observed_at, 'YYYYMMDDHH24MI')::BIGINT AS time_key
-    FROM stg_weather
+    FROM
+        stg_weather sw
+    LEFT JOIN
+        {{ source('dim_data', 'area') }} dc
+        ON sw.area_code = dc.area_code
+
 )
 
 SELECT * FROM fact
