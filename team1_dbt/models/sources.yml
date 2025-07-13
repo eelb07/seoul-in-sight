@@ -6,3 +6,8 @@ sources:
     tables:
       - name: weather
         identifier: source_weather
+  - name: dim_data
+    schema: dim
+    tables:
+      - name: area
+        identifier: dim_area
