@@ -106,7 +106,7 @@ def weather_data_pipeline():
                         .read()
                         .decode("utf-8")
                     )
-                    if "WEATHER_STTS" not in data:
+                    if "WEATHER_STTS" not in data or not data["WEATHER_STTS"]:
                         continue
 
                     weather = data["WEATHER_STTS"][0]
