@@ -17,6 +17,6 @@ with renamed as (
     event_extra_detail,
     observed_at,
     created_at
-  from {{ source('raw_event_data', 'source_event') }}
+  from {{ source('raw', 'event') }}
 )
 select * from renamed
