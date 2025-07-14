@@ -5,8 +5,6 @@ import io
 import pandas as pd
 import pendulum
 import logging
-import os
-import subprocess
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -15,6 +13,7 @@ from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.operators.bash import BashOperator
 
 # --- 설정 변수 ---
 BUCKET_NAME = Variable.get("BUCKET_NAME")
@@ -23,20 +22,7 @@ S3_PQ_PREFIX_EVENT = Variable.get("S3_PQ_PREFIX_EVENT")
 S3_PROCESSED_HISTORY_PREFIX = Variable.get("S3_PROCESSED_HISTORY_PREFIX")
 REDSHIFT_CONN_ID = Variable.get("REDSHIFT_CONN_ID")
 REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
-
-
-DBT_PROJECT_DIR = "/opt/airflow/team1_dbt"
-
-# 필수 변수 검증
-required_vars = [
-    BUCKET_NAME,
-    S3_PREFIX,
-    S3_PQ_PREFIX_EVENT,
-    S3_PROCESSED_HISTORY_PREFIX,
-    REDSHIFT_IAM_ROLE,
-]
-if not all(required_vars):
-    raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
+DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 log = logging.getLogger(__name__)
 
@@ -135,22 +121,34 @@ def event_data_pipeline():
                     }
                 )
 
+        log.info(f"[DEBUG] extract_and_transform 건수: {len(extracted_records)}")
         return {
             "event_records": extracted_records,
             "updated_processed_history": history_dict,
+            "observed_date": observed_date,
         }
 
     @task
-    def load_to_s3(pipeline_payload: dict) -> str:
+    def load_to_s3(pipeline_payload: dict) -> dict:
         event_records = pipeline_payload["event_records"]
         history_dict = pipeline_payload["updated_processed_history"]
+        observed_date = pipeline_payload["observed_date"]
 
-        # 이벤트 레코드가 없으면 조기 종료
+        parquet_key = f"{S3_PQ_PREFIX_EVENT}/{observed_date}.parquet"
+        parquet_path = f"s3://{BUCKET_NAME}/{parquet_key}"
+        s3_hook = S3Hook(aws_conn_id="aws_default")
+
+        # 신규 레코드가 없는 경우
         if not event_records:
-            log.info("저장할 이벤트 데이터가 없습니다.")
-            return ""
+            # 이미 Parquet 파일이 존재하면, 그 경로만 반환
+            if s3_hook.check_for_key(key=parquet_key, bucket_name=BUCKET_NAME):
+                log.info(f"신규 이벤트 없음. 기존 Parquet 파일 사용: {parquet_key}")
+                return {"parquet_path": parquet_path, "observed_date": observed_date}
+            # 파일도 없으면 완전 스킵
+            log.info("저장할 이벤트 데이터가 없고, 기존 Parquet 파일도 없습니다.")
+            return {"parquet_path": "", "observed_date": observed_date}
 
-        # Parquet 변환 및 업로드
+        # 신규 레코드가 있는 경우: 기존 로직대로 Parquet 생성 & 업로드
         df = pd.DataFrame(event_records)
         df["observed_at"] = pd.to_datetime(df["observed_at"], format="%Y%m%d")
         df["created_at"] = (
@@ -176,12 +174,9 @@ def event_data_pipeline():
             ]
         ]
 
-        parquet_key = f"{S3_PQ_PREFIX_EVENT}/{df['observed_at'].dt.strftime('%Y%m%d').iloc[0]}.parquet"
         buffer = io.BytesIO()
         df.to_parquet(buffer, engine="pyarrow", index=False)
         buffer.seek(0)
-
-        s3_hook = S3Hook(aws_conn_id="aws_default")
         s3_hook.load_file_obj(
             file_obj=buffer,
             bucket_name=BUCKET_NAME,
@@ -190,7 +185,7 @@ def event_data_pipeline():
         )
         log.info(f"Parquet 업로드 완료: {parquet_key}")
 
-        # history 저장
+        # history 업데이트
         s3_hook.get_conn().put_object(
             Bucket=BUCKET_NAME,
             Key=f"{S3_PROCESSED_HISTORY_PREFIX}/event.json",
@@ -201,15 +196,30 @@ def event_data_pipeline():
             f"processed_history 파일 업데이트 완료: {S3_PROCESSED_HISTORY_PREFIX}/event.json"
         )
 
-        return f"s3://{BUCKET_NAME}/{parquet_key}"
+        return {"parquet_path": parquet_path, "observed_date": observed_date}
 
     @task
-    def load_to_redshift(parquet_path: str) -> None:
+    def load_to_redshift(load_info: dict) -> None:
+        parquet_path = load_info["parquet_path"]
+        observed_date = load_info["observed_date"]
+
         if not parquet_path:
             log.info("Redshift 로드할 파일 없음")
             return
         hook = PostgresHook(postgres_conn_id=REDSHIFT_CONN_ID)
-        # column명 명시
+
+        # 동일 observed_date 레코드가 있는지 확인
+        existing = hook.get_first(
+            "SELECT COUNT(1) FROM source.source_event WHERE observed_at = %s",
+            parameters=[observed_date],
+        )[0]
+        if existing > 0:
+            log.info(
+                f"{observed_date} 데이터가 이미 {existing}건 존재하므로 적재를 건너뜁니다."
+            )
+            return
+
+        # 없으면 COPY 실행, column명 명시
         hook.run(f"""
             COPY source.source_event (
                 area_code, area_name, event_name,
@@ -224,42 +234,18 @@ def event_data_pipeline():
         """)
         log.info("Redshift 로드 완료")
 
-    @task
-    def run_dbt_command(command_args: str):
-        original_cwd = os.getcwd()  # 현재 작업 디렉토리 저장
-        try:
-            os.chdir(DBT_PROJECT_DIR)  # dbt 프로젝트 디렉토리로 이동
-
-            dbt_command = ["dbt"] + command_args.split()
-
-            log.info(f"dbt command 실행: {' '.join(dbt_command)}")
-            process = subprocess.run(
-                dbt_command, capture_output=True, text=True, check=True
-            )
-
-            log.info("dbt stdout:")
-            log.info(process.stdout)
-            if process.stderr:
-                log.warning("dbt stderr:")
-                log.warning(process.stderr)
-
-            return process.stdout
-
-        except subprocess.CalledProcessError as e:
-            log.error(f"dbt command 실패: {e}")
-            log.error(f"stdout: {e.stdout}")
-            log.error(f"stderr: {e.stderr}")
-            raise
-        finally:
-            os.chdir(original_cwd)  # 원래 작업 디렉토리로 돌아옴
+    run_dbt = BashOperator(
+        task_id="run_dbt_command",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
+        # bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --select dim_event",
+    )
 
     et = extract_and_transform()
-    s3_path = load_to_s3(et)
-    rd = load_to_redshift(s3_path)
-    dbt_run_status = run_dbt_command(command_args="run")
+    s3_info = load_to_s3(et)
+    rd = load_to_redshift(s3_info)
 
     # task 의존성 명시
-    et >> s3_path >> rd >> dbt_run_status
+    rd >> run_dbt
 
 
 # DAG 인스턴스화
