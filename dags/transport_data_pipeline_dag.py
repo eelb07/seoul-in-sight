@@ -25,11 +25,6 @@ TARGET_TABLE_SUBWAY = "source.source_subway"
 REDSHIFT_CONN_ID = "redshift_dev_db"
 
 
-# 필수 변수 검증
-required_vars = [BUCKET_NAME, S3_PREFIX, REDSHIFT_IAM_ROLE_ARN, DBT_PROJECT_DIR]
-if not all(required_vars):
-    raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
-
 log = logging.getLogger(__name__)
 
 
@@ -136,8 +131,7 @@ kst = pendulum.timezone("Asia/Seoul")
 
 @dag(
     dag_id="dag_transport",
-    schedule="@once",
-    # schedule="*/5 * * * *",
+    schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 8, tz="Asia/Seoul"),
     catchup=False,
     tags=["s3", "parquet"],
@@ -149,7 +143,6 @@ def transport_data_pipeline():
         s3_client = hook.get_conn()
 
         process_time = context["data_interval_end"].in_timezone("Asia/Seoul")
-        process_time = pendulum.datetime(2025, 7, 8, 0, 5, tz=kst)
         start_time = process_time.subtract(minutes=5)
 
         log.info(f"🔔{start_time} ~ {process_time} 사이의 raw_json 처리를 시작합니다.")
@@ -209,7 +202,7 @@ def transport_data_pipeline():
         bus_df = enforce_schema(bus_df)
         log.info("✅ schema enforced")
 
-        def upload(df, transport_type, time):
+        def load_to_s3(df, transport_type, time):
             buffer = io.BytesIO()
             df.to_parquet(buffer, engine="pyarrow", index=False)
             buffer.seek(0)
@@ -222,21 +215,19 @@ def transport_data_pipeline():
             s3_client.upload_fileobj(buffer, BUCKET_NAME, s3_key)
             log.info(f"✅ Uploaded: s3://{BUCKET_NAME}/{s3_key}")
 
-        upload(subway_df, "subway", process_time)
-        upload(bus_df, "bus", process_time)
+            return f"s3://{BUCKET_NAME}/{s3_key}"
 
-        return
+        s3_subway_path = load_to_s3(subway_df, "subway", process_time)
+        s3_bus_path = load_to_s3(bus_df, "bus", process_time)
+
+        s3_path = {"subway": s3_subway_path, "bus": s3_bus_path}
+
+        return s3_path
 
     @task
-    def load_to_redshift(**context):
-        process_time = context["data_interval_end"].in_timezone("Asia/Seoul")
-        process_time = pendulum.datetime(2025, 7, 8, 0, 5, tz=kst)
-
-        date_ymd = process_time.strftime("%Y%m%d")
-        time_hm = process_time.strftime("%H%M")
-
-        S3_BUS_PATH = f"s3://de6-team1-bucket/processed-data/transport/bus/{date_ymd}/{time_hm}.parquet"
-        S3_SUBWAY_PATH = f"s3://de6-team1-bucket/processed-data/transport/subway/{date_ymd}/{time_hm}.parquet"
+    def load_to_redshift(path, **context):
+        S3_BUS_PATH = path["bus"]
+        S3_SUBWAY_PATH = path["subway"]
 
         log.info(f"Transferring parquet in {S3_BUS_PATH}")
         log.info(f"Transferring parquet in {S3_SUBWAY_PATH}")
@@ -294,7 +285,8 @@ def transport_data_pipeline():
         bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --select fact_transport",
     )
 
-    extract_and_transform() >> load_to_redshift() >> run_dbt
+    key = extract_and_transform()
+    load_to_redshift(key) >> run_dbt
 
 
 dag_instance = transport_data_pipeline()
