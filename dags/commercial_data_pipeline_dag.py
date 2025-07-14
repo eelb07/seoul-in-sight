@@ -128,12 +128,16 @@ default_args = {
 )
 def commercial_data_pipeline():
 
-    @task(task_id="extract_and_transform")
-    def extract_and_transform(s3_client,  **context):
+    @task()
+    def extract_and_transform(**context):
         """
         S3에서 원시 상권 데이터를 추출하고 변환하며, S3의 이력 파일을 기반으로
         이미 처리된 레코드를 필터링합니다.
         """
+
+        s3_hook = S3Hook(aws_conn_id="aws_default")
+        s3_client = s3_hook.get_conn()
+
         # logical_date는 UTC 기준이므로, 서울 시간으로 변환
         process_start_time_utc = context['logical_date']
 
@@ -296,11 +300,14 @@ def commercial_data_pipeline():
 
 
 
-    @task(task_id="load_to_s3")
-    def load_to_s3(data_dict: dict, s3_client):
+    @task()
+    def load_to_s3(data_dict: dict):
         """
         처리된 상권 데이터와 RSB 데이터를 Parquet 파일로 S3에 업로드합니다.
         """
+        s3_hook = S3Hook(aws_conn_id="aws_default")
+        s3_client = s3_hook.get_conn()
+
         commercial_data = data_dict['source_commercial_data']
         commercial_rsb_data = data_dict['source_commercial_rsb_data']
 
@@ -485,7 +492,7 @@ def commercial_data_pipeline():
             's3_parquet_paths': saved_parquet_paths
         }
 
-    @task(task_id="load_to_redshift")
+    @task()
     def load_to_redshift(saved):
         """
         S3에서 Parquet 파일을 Redshift 테이블로 COPY INTO 명령을 사용하여 로드합니다.
@@ -550,21 +557,11 @@ def commercial_data_pipeline():
     )
 
 
-    # S3 클라이언트 초기화
-    s3 = None
-    try:
-        s3_hook = S3Hook(aws_conn_id="aws_default")
-        s3_client = s3_hook.get_conn()
-        logging.info("S3 클라이언트 초기화 완료.")
-    except Exception as e:
-        logging.critical(f"S3 클라이언트 초기화 실패: {e}")
-        return 
-
     # 데이터 추출 및 전처리
-    extracted_data = extract_and_transform(s3_client=s3_client)
+    extracted_data = extract_and_transform()
 
     # Parquet으로 S3에 업로드
-    saved_paths = load_to_s3(extracted_data, s3_client)
+    saved_paths = load_to_s3(extracted_data)
 
     # Redshift Source 테이블로 로드
     redshift_load_status = load_to_redshift(saved_paths) 
