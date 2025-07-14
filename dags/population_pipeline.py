@@ -63,7 +63,7 @@ def upload_processed_history_to_s3(
     dag_id="dag_population",
     schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 3, 0, 5, tz="Asia/Seoul"),
-    docs_md=textwrap.dedent("""
+    doc_md=textwrap.dedent("""
         - **추출 및 변환**: S3에서 raw json 데이터를 추출, 변환하고 중복 처리
         - **Parquet 업로드**: 처리된 데이터는 Parquet 파일로 S3에 업로드
         - **Redshift 적재**: S3의 Parquet 파일을 Redshift 테이블에 적재
