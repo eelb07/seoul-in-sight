@@ -99,7 +99,7 @@ final_fact as (
         station_count,
         area_code as area_id,
         to_char(observed_at, 'YYYYMMDDHH24MI')::bigint as time_key,
-        getdate() as created_at
+        dateadd(hour, 9, getdate()) as created_at
     from unioned
 )
 
