@@ -1,9 +1,14 @@
-{{ config(
+{{
+  config(
     materialized='incremental',
     unique_key='event_id',
     incremental_strategy='merge',
+    merge_update_columns=[],
+    on_schema_change='append_new_columns',
     schema='dim'
-) }}
+  )
+}}
+
 with source_data as (
   select distinct
     event_name,
@@ -15,13 +20,13 @@ with source_data as (
     is_paid,
     thumbnail_url,
     event_url,
-    event_extra_detail,
-    created_at
+    event_extra_detail
   from {{ ref('stg_event') }}
   {% if is_incremental() %}
     where created_at > (select max(created_at) from {{ this }})
   {% endif %}
 )
+
 select
   {{ dbt_utils.generate_surrogate_key([
        'event_name',
@@ -34,7 +39,7 @@ select
        'thumbnail_url',
        'event_url',
        'event_extra_detail'
-     ]) }} as event_id,
+  ]) }} as event_id,
   event_name,
   event_start_date,
   event_end_date,
