@@ -5,38 +5,37 @@
     schema='fact'
 ) }}
 with base as (
-  select distinct
-    event_name,
-    event_period,
-    to_date(split_part(event_period, '~', 1), 'YYYY-MM-DD') as event_start_date,
-    to_date(split_part(event_period, '~', 2), 'YYYY-MM-DD') as event_end_date,
-    event_place,
-    longitude,
-    latitude,
-    is_paid,
-    thumbnail_url,
-    event_url,
-    event_extra_detail,
-    observed_at,
-    created_at,
-    area_code
-  from {{ ref('stg_event') }}
+  select
+    *,
+    {{ dbt_utils.generate_surrogate_key([
+       'event_name',
+       "to_date(split_part(event_period,'~',1),'YYYY-MM-DD')",
+       "to_date(split_part(event_period,'~',2),'YYYY-MM-DD')",
+       'event_place',
+       'longitude',
+       'latitude',
+       "case when is_paid then 'true' else 'false' end",
+       'thumbnail_url',
+       'event_url',
+       'event_extra_detail'
+    ]) }} as event_id_key
+  from {{ ref('stg_event') }} b
   {% if is_incremental() %}
-    where created_at > (select max(created_at) from {{ this }})
+   where b.created_at > (select max(created_at) from {{ this }})
   {% endif %}
 ),
 enriched as (
   select
-    base.*,
-    dim.event_id
-  from base
-  --dim_event 테이블에서 미리 생성해 둔 event_id(surrogate key)를 끌어오기 위해 사용
-  left join {{ ref('dim_event') }} as dim
-    on base.event_name        = dim.event_name
-   and base.event_start_date = dim.event_start_date
-   and base.event_end_date   = dim.event_end_date
-   and base.event_place      = dim.event_place
+    b.*,
+    de.event_id,
+    da.area_id
+  from base b
+  left join {{ ref('dim_event') }} de
+    on de.event_id = b.event_id_key
+  left join {{ source('dim_data','area') }} da
+    on da.area_code = b.area_code
 ),
+
 with_surrogates as (
   select
     enriched.*,
@@ -46,13 +45,14 @@ with_surrogates as (
     ]) }} as fact_event_id
   from enriched
   where event_id is not null
+    and area_id  is not null
 )
+
 select
   fact_event_id,
   event_period,
   current_timestamp at time zone 'Asia/Seoul' as created_at,
   event_id,
-  --area_id 로 나중에 변경 필요
-  area_code,
+  area_id,
   observed_at
 from with_surrogates
