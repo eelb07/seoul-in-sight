@@ -64,7 +64,7 @@ def _parse_file_timestamp(key: str) -> pendulum.DateTime:
 
 @dag(
     dag_id="weather_data_pipeline",
-    start_date=pendulum.datetime(2025, 6, 30),
+    start_date=pendulum.datetime(2025, 7, 3, tz="Asia/Seoul"),
     schedule="*/10 * * * *",
     doc_md="""
     # 기상데이터 ETL 파이프라인
