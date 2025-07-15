@@ -67,10 +67,27 @@ def _parse_file_timestamp(key: str) -> pendulum.DateTime:
     start_date=pendulum.datetime(2025, 7, 3, tz="Asia/Seoul"),
     schedule="*/10 * * * *",
     doc_md="""
-    # 기상데이터 ETL 파이프라인
-    - **추출 및 변환**: S3에서 원시 JSON 데이터를 추출, 변환하고 이미 처리된 레코드를 필터링
-    - **Parquet 업로드**: 처리된 데이터를 Parquet 파일로 S3에 업로드
-    - **Redshift 로드**: S3의 Parquet 파일을 Redshift 테이블로 로드
+    # 기상 데이터 실시간 ETL 파이프라인
+    이 DAG는 10분마다 실행되며, S3에 수집된 1분 단위 기상 데이터를 변환하여 Redshift에 적재합니다.
+
+    ### 주요 작업
+    - **추출 (Extract)**
+        - 최근 10분간 S3에 수집된 JSON 데이터를 읽어 들입니다.
+        - WEATHER_STTS 항목이 있는 데이터만 필터링합니다.
+    - **변환 (Transform)**
+        - 관측지역 코드와 관측시간 기준으로 중복을 제거하고 최대값 기준으로 집계합니다.
+        - Pandas + PyArrow를 사용해 Parquet 포맷으로 변환 후 S3에 저장합니다.
+
+    - **적재 (Load)**
+        - 저장된 Parquet 파일을 Redshift의 source.source_weather 테이블로 COPY합니다.
+        - 적재 전 해당 시간대 데이터를 삭제한 후 다시 적재합니다.
+
+    - **DBT 실행**
+        - fact_weather 모델을 실행하여 팩트 테이블을 최신화합니다.
+
+    ### 스케줄
+    - 10분마다 실행
+    - KST 기준으로 최근 10분 데이터를 수집 및 처리
     """,
     catchup=False,
     tags=["weather", "ETL", "silver"],
