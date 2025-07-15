@@ -35,7 +35,7 @@ WITH stg_weather AS (
         created_at
     FROM {{ ref('stg_weather') }}
     {% if is_incremental() %}
-        WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
+        WHERE TO_CHAR(observed_at, 'YYYYMMDDHH24MI')::BIGINT > (SELECT MAX(time_key) FROM {{ this }})
     {% endif %}
 ),
 fact AS (
