@@ -65,7 +65,7 @@ def _parse_file_timestamp(key: str) -> pendulum.DateTime:
 @dag(
     dag_id="weather_data_pipeline",
     start_date=pendulum.datetime(2025, 7, 3, tz="Asia/Seoul"),
-    schedule="*/10 * * * *",
+    schedule="*/10 9-21 * * *",
     doc_md="""
     # 기상 데이터 실시간 ETL 파이프라인
     이 DAG는 10분마다 실행되며, S3에 수집된 1분 단위 기상 데이터를 변환하여 Redshift에 적재합니다.
