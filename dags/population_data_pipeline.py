@@ -26,10 +26,9 @@ def get_s3_client(conn_id="aws_conn_id"):
     return s3_hook.get_conn()
 
 
-def read_from_s3(bucket_name: str, key: str, conn_id="aws_conn_id"):
+def read_from_s3(s3_client, bucket_name: str, key: str):
     """지정한 S3 버킷과 키에 해당하는 객체를 문자열로 반환"""
-    s3 = get_s3_client(conn_id)
-    response = s3.get_object(Bucket=bucket_name, Key=key)
+    response = s3_client.get_object(Bucket=bucket_name, Key=key)
     return response["Body"].read().decode("utf-8")
 
 
@@ -65,7 +64,7 @@ def upload_processed_history_to_s3(
     dag_id="dag_population",
     schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 3, 0, 5, tz="Asia/Seoul"),
-    docs_md=textwrap.dedent("""
+    doc_md=textwrap.dedent("""
         - **추출 및 변환**: S3에서 raw json 데이터를 추출, 변환하고 중복 처리
         - **Parquet 업로드**: 처리된 데이터는 Parquet 파일로 S3에 업로드
         - **Redshift 적재**: S3의 Parquet 파일을 Redshift 테이블에 적재
@@ -102,7 +101,8 @@ def population_data_pipeline():
                 file_key = obj["Key"]
 
                 try:
-                    raw_json = read_from_s3(S3_BUCKET_NAME, file_key)
+                    s3 = get_s3_client("aws_conn_id")
+                    raw_json = read_from_s3(s3, S3_BUCKET_NAME, file_key)
                     raw_data = json.loads(raw_json)
 
                     citydata = raw_data.get("LIVE_PPLTN_STTS", [])
@@ -386,7 +386,7 @@ def population_data_pipeline():
         return merged_key
 
     @task
-    def load_to_redshift(merged_key: List[str]):
+    def load_to_redshift(merged_key: List[str], **context):
         if not merged_key:
             """
             5분 사이 수집된 모든 json이 이미 처리됐으면 parquet으로 변환할 것이 없으므로 merged_key는 빈 리스트임
@@ -400,6 +400,17 @@ def population_data_pipeline():
         hook = RedshiftSQLHook(redshift_conn_id="redshift_dev_db")
         source_table = "source.source_population"
 
+        utc_time = context["logical_date"]
+        kst_time = utc_time.in_timezone("Asia/Seoul")
+        end_time = kst_time.format("YYYY-MM-DD HH:mm:ss")
+        start_time = kst_time.subtract(minutes=5).format("YYYY-MM-DD HH:mm:ss")
+
+        hook.run("BEGIN")
+        hook.run(f"""
+        DELETE FROM {source_table}
+        WHERE observed_at BETWEEN '{start_time}' AND '{end_time}'
+        """)
+
         copy_sql = f"""
             COPY {source_table}
             FROM 's3://{S3_BUCKET_NAME}/{merged_key}'
@@ -408,6 +419,7 @@ def population_data_pipeline():
         """
 
         hook.run(copy_sql)
+        hook.run("COMMIT")
 
     run_dbt = BashOperator(
         task_id="run_dbt",
