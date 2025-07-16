@@ -33,8 +33,6 @@ def read_from_s3(s3_client, bucket_name: str, key: str):
 
 
 """처리된 observed_at 값이 기록된 s3_key(population.json)에 processed_history_data 업데이트"""
-
-
 def upload_processed_history_to_s3(
     s3_client,
     bucket_name: str,
