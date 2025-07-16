@@ -33,6 +33,8 @@ def read_from_s3(s3_client, bucket_name: str, key: str):
 
 
 """처리된 observed_at 값이 기록된 s3_key(population.json)에 processed_history_data 업데이트"""
+
+
 def upload_processed_history_to_s3(
     s3_client,
     bucket_name: str,
@@ -99,7 +101,6 @@ def population_data_pipeline():
                 file_key = obj["Key"]
 
                 try:
-                    s3 = get_s3_client("aws_conn_id")
                     raw_json = read_from_s3(s3, S3_BUCKET_NAME, file_key)
                     raw_data = json.loads(raw_json)
 
