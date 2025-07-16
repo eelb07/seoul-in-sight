@@ -22,7 +22,7 @@ DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 TARGET_TABLE_BUS = "source.source_bus"
 TARGET_TABLE_SUBWAY = "source.source_subway"
-REDSHIFT_CONN_ID = "redshift_dev_db"
+REDSHIFT_CONN_ID = Variable.get("REDSHIFT_CONN_ID")
 
 
 log = logging.getLogger(__name__)
@@ -233,7 +233,7 @@ def transport_data_pipeline():
         log.info(f"Transferring parquet in {S3_SUBWAY_PATH}")
 
         # Redshift Hook 준비
-        hook = PostgresHook(postgres_conn_id="redshift_dev_db")
+        hook = PostgresHook(postgres_conn_id=REDSHIFT_CONN_ID)
 
         sql_bus = f"""
             COPY {TARGET_TABLE_BUS}
