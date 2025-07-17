@@ -399,16 +399,7 @@ def population_data_pipeline():
         hook = RedshiftSQLHook(redshift_conn_id="redshift_dev_db")
         source_table = "source.source_population"
 
-        utc_time = context["logical_date"]
-        kst_time = utc_time.in_timezone("Asia/Seoul")
-        end_time = kst_time.format("YYYY-MM-DD HH:mm:ss")
-        start_time = kst_time.subtract(minutes=5).format("YYYY-MM-DD HH:mm:ss")
-
         hook.run("BEGIN")
-        hook.run(f"""
-        DELETE FROM {source_table}
-        WHERE observed_at BETWEEN '{start_time}' AND '{end_time}'
-        """)
 
         copy_sql = f"""
             COPY {source_table}
