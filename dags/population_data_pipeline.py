@@ -80,16 +80,16 @@ def population_data_pipeline():
         S3에 최근 5분 동안 수집된 raw json 데이터에서 인구 데이터 추출
         - ex) logical_date가 20:10이면 20:05~09 사이에 수집된 raw json 탐색
         """
-        logical_date = context["logical_date"]
+        logical_date_utc = context["logical_date"]
 
-        process_start_time = logical_date
+        process_start_time_kst = logical_date_utc.in_timezone("Asia/Seoul")
 
         s3 = get_s3_client()
         files_to_process = []
 
         # 5분 내의 생성된 데이터 prefix 생성 후 실제 존재하는 것만 가져옴
         for i in range(5):
-            file_time = process_start_time.subtract(minutes=(5 - i))
+            file_time = process_start_time_kst.subtract(minutes=(5 - i))
 
             s3_prefix_date_path = file_time.strftime("%Y%m%d")
             s3_prefix_time_name = file_time.strftime("%H%M")
