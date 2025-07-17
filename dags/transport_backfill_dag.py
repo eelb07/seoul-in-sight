@@ -1,8 +1,8 @@
-from airflow import DAG
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.decorators import task
+from airflow.decorators import dag, task
 from airflow.models import Variable
+from datetime import timedelta
 import pendulum
 import logging
 
@@ -10,21 +10,42 @@ log = logging.getLogger(__name__)
 
 BUCKET_NAME = Variable.get("BUCKET_NAME")
 REDSHIFT_IAM_ROLE_ARN = Variable.get("REDSHIFT_IAM_ROLE_ARN")
-DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 TARGET_TABLE_BUS = "source.source_bus"
 TARGET_TABLE_SUBWAY = "source.source_subway"
 REDSHIFT_CONN_ID = Variable.get("REDSHIFT_CONN_ID")
-
+DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
+DBT_PROFILES_DIR = Variable.get("DBT_PROFILES_DIR")
 
 kst = pendulum.timezone("Asia/Seoul")
+default_args = {
+    "owner": "Won",
+    "retries": 3,
+    "retry_delay": timedelta(seconds=10),
+}
 
-with DAG(
+
+@dag(
     dag_id="dag_transport_glue",
     schedule="0 9 * * *",
     start_date=pendulum.datetime(2025, 7, 2, tz="Asia/Seoul"),
     catchup=False,
     tags=["12 hour", "glue"],
-) as dag:
+    default_args=default_args,
+    doc_md="""
+    # 대중교통 Backfill용 DAG
+    이 DAG는 매일 오전 9시에 실행되어, 전날 밤 9시부터 오전 9시까지의 12시간 동안 누락되었을 수 있는 기상 데이터를 백필합니다.
+
+    ### 주요 작업
+    1. **Glue Job**: S3의 원시 JSON 데이터를 Parquet으로 변환하여 저장합니다.
+    2. **Redshift COPY**: 변환된 데이터를 Redshift의 source.source_transport 테이블에 적재합니다.
+    3. **dbt run**: fact_transport 모델을 실행하여 팩트 테이블에 적재 합니다.
+
+    ### 스케줄
+    - 매일 오전 9시 (KST)
+    - 전날 밤 9시 ~ 당일 오전 9시 데이터 처리
+    """,
+)
+def transport_backfill_night():
     run_glue_job = GlueJobOperator(
         task_id="transport_data_backfill_night",
         job_name="de6-team1-transport",
@@ -99,12 +120,12 @@ with DAG(
         hook.run(sql_subway)
         log.info("✅ Redshift COPY 완료!")
 
-    # run_dbt = BashOperator(
-    #     task_id="run_dbt",
-    #     bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --select fact_transport",
-    # )
+    @task.bash
+    def run_dbt():
+        return f"dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select fact_transport"
 
     glue_task = run_glue_job
-    redshift_task = load_to_redshift()
+    load = load_to_redshift()
+    dbt = run_dbt()
 
-    # glue_task >> redshift_task >> run_dbt
+    glue_task >> load >> dbt
