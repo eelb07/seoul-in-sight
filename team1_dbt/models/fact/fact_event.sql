@@ -1,6 +1,6 @@
 {{ config(
     materialized='incremental',
-    unique_key='fact_event_id',
+    unique_key=['event_id','area_id','observed_at'],
     incremental_strategy='merge',
     schema='fact'
 ) }}
@@ -41,6 +41,7 @@ with_surrogates as (
     enriched.*,
     {{ dbt_utils.generate_surrogate_key([
        'event_id',
+       'area_id',
        'observed_at'
     ]) }} as fact_event_id
   from enriched
