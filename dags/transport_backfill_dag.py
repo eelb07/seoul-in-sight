@@ -1,7 +1,7 @@
-from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.decorators import dag, task
 from airflow.models import Variable
+from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import timedelta
 import pendulum
 import logging
@@ -29,7 +29,7 @@ default_args = {
     schedule="0 9 * * *",
     start_date=pendulum.datetime(2025, 7, 2, tz="Asia/Seoul"),
     catchup=False,
-    tags=["12 hour", "glue"],
+    tags=["transport", "12 hour", "glue"],
     default_args=default_args,
     doc_md="""
     # 대중교통 Backfill용 DAG
@@ -47,12 +47,12 @@ default_args = {
 )
 def transport_backfill_night():
     run_glue_job = GlueJobOperator(
-        task_id="transport_data_backfill_night",
-        job_name="de6-team1-transport",
+        task_id="run_glue_backfill_night",
+        job_name="de6-team1-glue-transport",
         script_location=f"s3://{BUCKET_NAME}/glue/jobs/transport_backfill_night.py",
         script_args={
-            "JOB_NAME": "de6-team1-transport",
-            "logical_date": "{{ data_interval_end }}",
+            "--JOB_NAME": "transport_data_backfill_night",
+            "--logical_date": "{{ data_interval_end }}",
         },
         region_name="ap-northeast-2",
         wait_for_completion=True,
@@ -129,3 +129,6 @@ def transport_backfill_night():
     dbt = run_dbt()
 
     glue_task >> load >> dbt
+
+
+transport_backfill_night()
