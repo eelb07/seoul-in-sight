@@ -23,6 +23,7 @@ S3_PROCESSED_HISTORY_PREFIX = Variable.get("S3_PROCESSED_HISTORY_PREFIX")
 REDSHIFT_CONN_ID = Variable.get("REDSHIFT_CONN_ID")
 REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
 DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
+DBT_PROFILES_DIR = Variable.get("DBT_PROFILES_DIR")
 
 log = logging.getLogger(__name__)
 
@@ -236,8 +237,7 @@ def event_data_pipeline():
 
     run_dbt = BashOperator(
         task_id="run_dbt_command",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
-        # bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --select dim_event",
+        bash_command=f"dbt run --project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} --select +fact_event",
     )
 
     et = extract_and_transform()
