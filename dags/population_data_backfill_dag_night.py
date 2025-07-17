@@ -105,14 +105,7 @@ def population_data_backfill_night():
         source_table = "source.source_population"
         redshift_iam_role_arn = Variable.get("REDSHIFT_IAM_ROLE_ARN")
 
-        delete_start_time = start_time.format("YYYY-MM-DD HH:00:00")
-        delete_end_time = end_time.format("YYYY-MM-DD HH:00:00")
-
         redshift.run("BEGIN;")
-        redshift.run(f"""
-            DELETE FROM {source_table}
-            WHERE observed_at BETWEEN '{delete_start_time}' AND '{delete_end_time}';
-        """)
 
         redshift.run(f"""
             COPY {source_table}
