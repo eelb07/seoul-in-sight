@@ -57,6 +57,4 @@ jobs:
           S3_GLUE_PATH="s3://${{ secrets.S3_BUCKET_NAME }}/glue/jobs/"
 
           # Deploy
-          echo "Deploying Glue job scripts from $GLUE_JOBS_DIR to $S3_GLUE_PATH"
           aws s3 sync "${GLUE_JOBS_DIR}" "${S3_GLUE_PATH}"
-          echo "Glue Job scripts deployed successfully to S3."
