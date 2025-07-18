@@ -114,7 +114,14 @@ def weather_data_pipeline():
         s3_hook = S3Hook(aws_conn_id="aws_default")
         records = []
         for prefix in prefixes:
-            for key in s3_hook.list_keys(bucket_name=S3_BUCKET, prefix=prefix):
+            keys = s3_hook.list_keys(bucket_name=S3_BUCKET, prefix=prefix)
+            if not keys:
+                logger.warning(
+                    f"{prefix} No S3 keys found for this prefix. Skipping to the next prefix."
+                )
+                continue
+
+            for key in keys:
                 file_time = _parse_file_timestamp(key)
                 if start_kst <= file_time < kst_time:
                     data = json.loads(
