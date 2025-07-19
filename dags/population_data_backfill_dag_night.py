@@ -12,7 +12,7 @@ import logging
 import textwrap
 
 logger = logging.getLogger(__name__)
-S3_BUCKET = "de6-team1-bucket"
+S3_BUCKET = Variable.get("BUCKET_NAME")
 DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 DBT_PROFILES_DIR = Variable.get("DBT_PROFILES_DIR")
 
@@ -60,7 +60,9 @@ def population_data_backfill_night():
         utc_time = context["logical_date"]
         kst_time = utc_time.in_timezone("Asia/Seoul")
         start_time = kst_time.subtract(days=1).replace(hour=21, minute=0, second=0)
+        # start_time = kst_time.replace(hour=9, minute=0, second=0)
         end_time = kst_time.replace(hour=9, minute=0, second=0)
+        # end_time = kst_time.replace(hour=15, minute=59, second=59)
 
         s3_hook = S3Hook("aws_conn_id")
         manifest_entries = {"entries": []}
