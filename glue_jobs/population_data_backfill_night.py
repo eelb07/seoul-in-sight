@@ -28,7 +28,9 @@ logical_time = datetime.fromisoformat(args["logical_date"]).replace(
     tzinfo=ZoneInfo("Asia/Seoul")
 )
 start_time = (logical_time - timedelta(days=1)).replace(hour=21, minute=0, second=0)
-end_time = logical_time.replace(hour=2, minute=0, second=0)
+# start_time = logical_time.replace(hour=0, minute=0, second=0)
+end_time = logical_time.replace(hour=9, minute=0, second=0)
+# end_time = logical_time.replace(hour=23, minute=59, second=59)
 now_str = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
 
 # S3 정보
@@ -53,6 +55,7 @@ while cursor < end_time:
     )
     cursor += timedelta(hours=1)
 
+print(s3_paths)
 # spark로 json파일들을 병렬로 로드
 df = spark.read.json(s3_paths)
 
