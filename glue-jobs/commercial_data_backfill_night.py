@@ -46,8 +46,8 @@ def generate_s3_paths(start_dt: datetime, end_dt: datetime, base_s3_path: str) -
     while current <= end_dt: # end_dt까지 포함
         path_ymd = current.strftime("%Y%m%d")
         path_h = current.strftime("%H")
-        paths.append(f"{base_s3_path}/{path_ymd}/{path_h}0*.json")
-        current += timedelta(hours=12)
+        paths.append(f"{base_s3_path}/{path_ymd}/{path_h}*.json")
+        current += timedelta(hours=1)
     return paths
 
 
@@ -65,7 +65,6 @@ s3 = boto3.client("s3")
 processed_observed_at_dict = {}
 processed_observed_at_set = set() 
 processed_history_s3_key = f"{S3_PROCESSED_HISTORY_PREFIX}/commercial.json"
-# processed_history_broadcast 변수를 초기화하여 항상 정의되도록 합니다.
 processed_history_broadcast = None 
 
 try:
@@ -94,8 +93,7 @@ except ClientError as e:
 kst = pytz.timezone("Asia/Seoul")
 now_kst = datetime.now(tz=kst)
 start_time = (now_kst - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0)
-# end_time = now_kst.replace(hour=8, minute=59, second=0)
-end_time = (now_kst - timedelta(days=1)).replace(hour=21, minute=59, second=0, microsecond=0)
+end_time = now_kst.replace(hour=8, minute=59, second=0)
 
 print(f"조회 시간 범위: {start_time} ~ {end_time}")
 
@@ -107,7 +105,7 @@ current_time_iter = start_time
 s3_paths_to_read = generate_s3_paths(start_time, end_time, BASE_RAW_S3_PATH)
 
 if not s3_paths_to_read:
-    print("ℹ처리할 새 파일이 없습니다.")
+    print("처리할 새 파일이 없습니다.")
     commercial_df = spark.createDataFrame([], schema=StructType([])) 
     commercial_rsb_df = spark.createDataFrame([], schema=StructType([])) 
 else:
@@ -291,7 +289,6 @@ def delete_s3_prefix(bucket, prefix):
 output_comm_path_prefix = f"{S3_PQ_PREFIX_COMM}/{now_kst.strftime('%Y%m%d')}/night"
 output_rsb_path_prefix = f"{S3_PQ_PREFIX_RSB}/{now_kst.strftime('%Y%m%d')}/night"
 
-# S3 디렉터리 삭제 함수는 prefix를 받으므로, 날짜/시간 접두사까지만 전달합니다.
 delete_s3_prefix(BUCKET_NAME, output_comm_path_prefix)
 delete_s3_prefix(BUCKET_NAME, output_rsb_path_prefix)
 
@@ -330,6 +327,6 @@ try:
         Key=processed_history_s3_key,
         Body=json.dumps(processed_observed_at_dict, indent=4)
     )
-    print(f"✅ 처리 이력 업데이트 완료: s3://{BUCKET_NAME}/{processed_history_s3_key}")
+    print(f"처리 이력 업데이트 완료: s3://{BUCKET_NAME}/{processed_history_s3_key}")
 except ClientError as e:
-    print(f"❌ 처리 이력 저장 실패: {e}")
+    print(f"처리 이력 저장 실패: {e}")
