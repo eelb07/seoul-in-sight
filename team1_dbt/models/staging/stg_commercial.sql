@@ -22,5 +22,5 @@ select
     individual_consumer_ratio,
     corporate_consumer_ratio,
     observed_at,
-    created_at           
+    CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul' AS created_at 
 from {{ source('raw_commercial_data', 'commercial') }}

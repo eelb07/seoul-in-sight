@@ -55,7 +55,7 @@ final_fact AS (
         individual_consumer_ratio::DECIMAL(5,2) AS individual_consumer_ratio,
         corporate_consumer_ratio::DECIMAL(5,2) AS corporate_consumer_ratio,
         dc.area_id::SMALLINT AS area_id, 
-        CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul' AS created_at
+        sc.created_at AS created_at
     FROM stg_commercial_data sc
     LEFT JOIN {{ source('dim_data', 'area') }} dc
         ON sc.area_code = dc.area_code

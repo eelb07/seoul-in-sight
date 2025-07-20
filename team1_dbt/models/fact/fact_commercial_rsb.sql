@@ -36,7 +36,7 @@ final_fact AS (
         s.merchant_count::INT AS merchant_count,
         s.merchant_basis_month::CHARACTER(6) AS merchant_basis_month,
         dc.category_id::SMALLINT AS category_id,  
-        CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul' AS created_at
+        s.created_at AS created_at
     FROM stg_commercial_rsb_data s
     LEFT JOIN {{ source('dim_data', 'category') }} dc
         ON s.category_large = dc.category_large
