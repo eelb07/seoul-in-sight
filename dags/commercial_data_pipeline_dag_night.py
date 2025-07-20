@@ -29,15 +29,15 @@ DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 
 @dag(
-    dag_id="upload",
+    dag_id="commercial_data_backfill_night",
     schedule="32 9 * * *", 
     start_date=pendulum.datetime(2025, 7, 4, tz="Asia/Seoul"), 
     catchup=False,
-    tags=["aws", "glue", "test"],
+    tags=["night", "glue", "commercial"],
 )
 def commercial_data_backfill_night():
     run_glue_job = GlueJobOperator(
-        task_id="commercial_data_backfill_night",
+        task_id="run_glue_backfill_night",
         job_name="de6-team1-glue-commercial-backfill-night", 
         replace_script_file=True
     )
