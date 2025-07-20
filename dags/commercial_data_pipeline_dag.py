@@ -121,7 +121,7 @@ default_args = {
 def commercial_data_pipeline():
 
     @task()
-    def extract_and_transform(**context):
+    def extract_and_transform(**context) -> dict:
         """
         S3에서 원시 상권 데이터를 추출하고 변환하며, S3의 이력 파일을 기반으로
         이미 처리된 레코드를 필터링합니다.
@@ -293,7 +293,7 @@ def commercial_data_pipeline():
 
 
     @task()
-    def load_to_s3(data_dict: dict):
+    def load_to_s3(data_dict: dict) -> dict:
         """
         처리된 상권 데이터와 RSB 데이터를 Parquet 파일로 S3에 업로드합니다.
         """
@@ -485,7 +485,7 @@ def commercial_data_pipeline():
         }
 
     @task()
-    def load_to_redshift(saved):
+    def load_to_redshift(saved) -> None:
         """
         S3에서 Parquet 파일을 Redshift 테이블로 COPY INTO 명령을 사용하여 로드합니다.
         """
