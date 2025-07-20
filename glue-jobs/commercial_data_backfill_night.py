@@ -145,8 +145,6 @@ else:
     # --------------------------
     # Spark DataFrame용 Schema 정의
     # --------------------------
-
-    # Commercial DataFrame Schema
     commercial_schema = StructType([
         StructField("source_id", StringType(), True),
         StructField("area_code", StringType(), True),
@@ -200,8 +198,6 @@ else:
                                .withColumn("created_at", F.to_timestamp(F.col("created_at")))
 
     commercial_df.drop("source_id").show(truncate=False)
-
-    # Commercial RSB DataFrame Schema
     commercial_rsb_schema = StructType([
         StructField("source_id", StringType(), True),
         StructField("category_large", StringType(), True),
@@ -266,31 +262,8 @@ else:
     if commercial_df.count() == 0 and commercial_rsb_df.count() == 0:
         print("기존 처리 이력에 따라 처리할 새로운 데이터가 없습니다.")
 
-
-def delete_s3_prefix(bucket, prefix):
-    print(f"S3 {bucket}/{prefix} 디렉터리 내 객체 삭제 시작...")
-    paginator = s3.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
-    delete_keys = {'Objects': []}
-    for page in pages:
-        if 'Contents' in page:
-            for obj in page['Contents']:
-                delete_keys['Objects'].append({'Key': obj['Key']})
-                
-            if len(delete_keys['Objects']) >= 1000: 
-                s3.delete_objects(Bucket=bucket, Delete=delete_keys)
-                delete_keys = {'Objects': []} 
-    
-    if len(delete_keys['Objects']) > 0: 
-        s3.delete_objects(Bucket=bucket, Delete=delete_keys)
-    print(f"S3 {bucket}/{prefix} 디렉터리 내 객체 삭제 완료.")
-
-
 output_comm_path_prefix = f"{S3_PQ_PREFIX_COMM}/{now_kst.strftime('%Y%m%d')}/night"
 output_rsb_path_prefix = f"{S3_PQ_PREFIX_RSB}/{now_kst.strftime('%Y%m%d')}/night"
-
-delete_s3_prefix(BUCKET_NAME, output_comm_path_prefix)
-delete_s3_prefix(BUCKET_NAME, output_rsb_path_prefix)
 
 
 # --------------------------
