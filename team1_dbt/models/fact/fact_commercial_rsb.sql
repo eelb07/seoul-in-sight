@@ -17,6 +17,7 @@ WITH stg_commercial_rsb_data AS (
         category_payment_max,  
         merchant_count,
         merchant_basis_month,
+        time_key,
         created_at
     FROM {{ ref('stg_commercial_rsb') }}
 
@@ -36,6 +37,7 @@ final_fact AS (
         s.merchant_count::INT AS merchant_count,
         s.merchant_basis_month::CHARACTER(6) AS merchant_basis_month,
         dc.category_id::SMALLINT AS category_id,  
+        s.time_key AS time_key,
         s.created_at AS created_at
     FROM stg_commercial_rsb_data s
     LEFT JOIN {{ source('dim_data', 'category') }} dc
