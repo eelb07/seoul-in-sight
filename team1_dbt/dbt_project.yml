@@ -40,3 +40,4 @@ models:
     fact:
       +schema: "fact" 
       +materialized: incremental 
+      +tags: ['fact']

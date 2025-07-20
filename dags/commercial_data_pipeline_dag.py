@@ -12,7 +12,6 @@ import botocore.exceptions
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
-from airflow.hooks.base import BaseHook
 from airflow.operators.bash import BashOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.hooks.redshift_sql import RedshiftSQLHook
@@ -26,13 +25,6 @@ S3_PROCESSED_HISTORY_PREFIX = Variable.get("S3_PROCESSED_HISTORY_PREFIX")
 REDSHIFT_IAM_ROLE = Variable.get("REDSHIFT_IAM_ROLE_ARN")
 DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
-# 필수 변수 검증
-required_vars = [
-    BUCKET_NAME, S3_PREFIX, S3_PQ_PREFIX_COMM, 
-    S3_PQ_PREFIX_RSB, S3_PROCESSED_HISTORY_PREFIX, REDSHIFT_IAM_ROLE, DBT_PROJECT_DIR
-]
-if not all(required_vars):
-    raise ValueError("필수 Airflow Variables가 설정되지 않았습니다.")
 
 log = logging.getLogger(__name__)
 
@@ -553,7 +545,7 @@ def commercial_data_pipeline():
 
     run_dbt = BashOperator(
         task_id="run_dbt_command",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run --select tag:fact",
     )
 
 
