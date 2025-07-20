@@ -16,6 +16,9 @@ from botocore.exceptions import ClientError
 from datetime import datetime, timezone, timedelta
 import pytz  
 from pyspark.sql import functions as F 
+from zoneinfo import ZoneInfo 
+
+
 
 # --------------------------
 # 환경 설정
@@ -26,6 +29,7 @@ S3_PROCESSED_HISTORY_PREFIX = "processed_history"
 S3_PQ_PREFIX_COMM =  "processed-data/commercial"
 S3_PQ_PREFIX_RSB =  "processed-data/commercial_rsb"
 BASE_RAW_S3_PATH = f"s3://{BUCKET_NAME}/{S3_PREFIX}"
+KST = ZoneInfo("Asia/Seoul")
 
 # --------------------------
 # 유틸 함수 
@@ -50,10 +54,15 @@ def generate_s3_paths(start_dt: datetime, end_dt: datetime, base_s3_path: str) -
         current += timedelta(hours=1)
     return paths
 
+def parse_logical_date(logical_date_str):
+     return datetime.fromisoformat(logical_date_str).astimezone(KST)
+
 
 # --------------------------
 # Glue 시작
 # --------------------------
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "logical_date"])
+logical_date = parse_logical_date(args["logical_date"])
 spark = SparkSession.builder.appName("CommercialETLJob").getOrCreate()
 sc = SparkContext.getOrCreate()
 glueContext = GlueContext(sc)
@@ -78,12 +87,12 @@ try:
             processed_observed_at_set.add((int(area_id_str), value['observed_at']))
 
     processed_history_df = spark.createDataFrame(processed_history_rows, ["area_id", "observed_at"])
-    processed_history_broadcast = F.broadcast(processed_history_df) # 여기서 정의됨
+    processed_history_broadcast = F.broadcast(processed_history_df) 
 
     print(f"기존 처리 이력 로드 완료: {len(processed_observed_at_set)}개")
 except ClientError as e:
     if e.response["Error"]["Code"] == "NoSuchKey":
-        print("ℹ처리 이력 없음 - 첫 실행")
+        print("처리 이력 없음 - 첫 실행")
     else:
         raise
 
@@ -91,12 +100,11 @@ except ClientError as e:
 # 처리 대상 시간 범위 설정
 # --------------------------
 kst = pytz.timezone("Asia/Seoul")
-now_kst = datetime.now(tz=kst)
-start_time = (now_kst - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0)
-end_time = now_kst.replace(hour=8, minute=59, second=0)
+now_kst = logical_date
+start_time = (logical_date - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0)
+end_time = logical_date.replace(hour=8, minute=59, second=0)
 
 print(f"조회 시간 범위: {start_time} ~ {end_time}")
-
 # --------------------------
 # S3에서 파일 처리 
 # --------------------------
@@ -145,6 +153,8 @@ else:
     # --------------------------
     # Spark DataFrame용 Schema 정의
     # --------------------------
+
+    # Commercial DataFrame Schema
     commercial_schema = StructType([
         StructField("source_id", StringType(), True),
         StructField("area_code", StringType(), True),
@@ -195,9 +205,11 @@ else:
     # 명시적 스키마 적용 및 타임스탬프 변환
     commercial_df = spark.createDataFrame(commercial_df.rdd, schema=commercial_schema)
     commercial_df = commercial_df.withColumn("observed_at", F.to_timestamp(F.col("observed_at"))) \
-                               .withColumn("created_at", F.to_timestamp(F.col("created_at")))
+                              .withColumn("created_at", F.to_timestamp(F.col("created_at")))
 
     commercial_df.drop("source_id").show(truncate=False)
+
+    # Commercial RSB DataFrame Schema
     commercial_rsb_schema = StructType([
         StructField("source_id", StringType(), True),
         StructField("category_large", StringType(), True),
@@ -234,7 +246,7 @@ else:
     # 명시적 스키마 적용 및 타임스탬프 변환
     commercial_rsb_df = spark.createDataFrame(commercial_rsb_df.rdd, schema=commercial_rsb_schema)
     commercial_rsb_df = commercial_rsb_df.withColumn("observed_at", F.to_timestamp(F.col("observed_at"))) \
-                                       .withColumn("created_at", F.to_timestamp(F.col("created_at")))
+                                      .withColumn("created_at", F.to_timestamp(F.col("created_at")))
 
     commercial_rsb_df.drop("source_id").show(truncate=False)
 
@@ -262,8 +274,31 @@ else:
     if commercial_df.count() == 0 and commercial_rsb_df.count() == 0:
         print("기존 처리 이력에 따라 처리할 새로운 데이터가 없습니다.")
 
+
+def delete_s3_prefix(bucket, prefix):
+    print(f"S3 {bucket}/{prefix} 디렉터리 내 객체 삭제 시작...")
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    delete_keys = {'Objects': []}
+    for page in pages:
+        if 'Contents' in page:
+            for obj in page['Contents']:
+                delete_keys['Objects'].append({'Key': obj['Key']})
+                
+            if len(delete_keys['Objects']) >= 1000: 
+                s3.delete_objects(Bucket=bucket, Delete=delete_keys)
+                delete_keys = {'Objects': []} 
+    
+    if len(delete_keys['Objects']) > 0: 
+        s3.delete_objects(Bucket=bucket, Delete=delete_keys)
+    print(f"S3 {bucket}/{prefix} 디렉터리 내 객체 삭제 완료.")
+
+
 output_comm_path_prefix = f"{S3_PQ_PREFIX_COMM}/{now_kst.strftime('%Y%m%d')}/night"
 output_rsb_path_prefix = f"{S3_PQ_PREFIX_RSB}/{now_kst.strftime('%Y%m%d')}/night"
+
+delete_s3_prefix(BUCKET_NAME, output_comm_path_prefix)
+delete_s3_prefix(BUCKET_NAME, output_rsb_path_prefix)
 
 
 # --------------------------

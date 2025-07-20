@@ -39,7 +39,10 @@ def commercial_data_backfill_night():
     run_glue_job = GlueJobOperator(
         task_id="run_glue_backfill_night",
         job_name="de6-team1-glue-commercial-backfill-night", 
-        replace_script_file=True
+        replace_script_file=True,
+        script_args={
+            "--logical_date": "{{ logical_date }}",
+        },
     )
 
     @task()
