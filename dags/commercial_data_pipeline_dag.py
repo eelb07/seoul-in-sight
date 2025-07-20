@@ -105,7 +105,7 @@ default_args = {
 
 @dag(
     dag_id="dag_commercial",
-    schedule="*/5 * * * *",
+    schedule="*/5 9-20 * * *", # 오전 9시부터 오후 8시 55분까지 매 5분마다 실행
     start_date=pendulum.datetime(2025, 7, 2, tz="Asia/Seoul"),
     catchup=False,
     doc_md="""
