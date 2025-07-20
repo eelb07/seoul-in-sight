@@ -4,6 +4,7 @@ from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.redshift_sql import RedshiftSQLHook
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
+from airflow.operators.bash import BashOperator
 
 import logging
 import hashlib
@@ -29,8 +30,8 @@ DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 @dag(
     dag_id="upload",
-    schedule="30 9 * * *", 
-    start_date=pendulum.datetime(2025, 7, 1, tz="Asia/Seoul"), 
+    schedule="32 9 * * *", 
+    start_date=pendulum.datetime(2025, 7, 4, tz="Asia/Seoul"), 
     catchup=False,
     tags=["aws", "glue", "test"],
 )
@@ -83,7 +84,12 @@ def commercial_data_backfill_night():
         """
         redshift_hook.run(copy_rsb_sql)
 
-    run_glue_job >> load_to_redshift()
+    run_dbt = BashOperator(
+        task_id="run_dbt_command",
+        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run --select tag:fact",
+    )
+
+    run_glue_job >> load_to_redshift() >> run_dbt
 
 
 commercial_data_backfill_night()    
