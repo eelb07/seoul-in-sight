@@ -13,6 +13,15 @@ sources:
         description: "상권 카테고리별 데이터"
         identifier: source_commercial_rsb
         loaded_at_field: created_at 
+  - name: raw_transport
+    schema: source
+    tables:
+      - name: bus
+        identifier: source_bus
+        loaded_at_field: created_at
+      - name: subway
+        identifier: source_subway
+        loaded_at_field: created_at
   - name: dim_data
     schema: dim
     tables:
