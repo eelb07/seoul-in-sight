@@ -136,7 +136,7 @@ kst = pendulum.timezone("Asia/Seoul")
 
 @dag(
     dag_id="dag_transport",
-    schedule="*/5 9-21 * * *",
+    schedule="*/5 9-20 * * *",
     start_date=pendulum.datetime(2025, 7, 8, tz="Asia/Seoul"),
     catchup=False,
     tags=["s3", "parquet"],
