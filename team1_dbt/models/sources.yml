@@ -4,6 +4,8 @@ sources:
   - name: raw
     schema: source
     tables:
+      - name: population
+        identifier: source_population
       - name: event
         identifier: source_event
 
