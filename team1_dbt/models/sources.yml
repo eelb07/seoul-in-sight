@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: source
+    tables:
+      - name: event
+        identifier: source_event
+
+  - name: dim_data
+    schema: dim
+    tables:
+      - name: area
+        identifier: dim_area
