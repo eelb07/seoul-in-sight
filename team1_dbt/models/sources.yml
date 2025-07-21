@@ -4,7 +4,6 @@ sources:
   - name: raw_commercial_data 
     description: "서울시 상권 데이터 원본 소스"
     schema: source           
-
     tables:
       - name: commercial     
         description: "상권 일반 데이터"
@@ -14,10 +13,8 @@ sources:
         description: "상권 카테고리별 데이터"
         identifier: source_commercial_rsb
         loaded_at_field: created_at 
-
   - name: dim_data
     schema: dim
-
     tables:
       - name: category
         identifier: dim_category 
@@ -30,9 +27,5 @@ sources:
         identifier: source_population
       - name: event
         identifier: source_event
-
-  - name: dim_data
-    schema: dim
-    tables:
-      - name: area
-        identifier: dim_area
+      - name: weather
+        identifier: source_weather
