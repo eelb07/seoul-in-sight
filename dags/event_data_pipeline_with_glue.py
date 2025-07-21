@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
     dag_id="event_data_pipeline_with_glue",
     schedule="0 11 * * *",
     start_date=pendulum.datetime(2025, 7, 2, tz="Asia/Seoul"),
-    catchup=False,
+    catchup=True,
     tags=["event", "glue"],
     default_args={"retries": 1, "retry_delay": timedelta(seconds=10)},
     doc_md="""
@@ -36,7 +36,8 @@ log = logging.getLogger(__name__)
     """,
 )
 def event_data_pipeline_with_glue():
-    # 처리할 파일 하나씩 골라서 넘기는 Task
+    """처리할 파일 하나씩 골라서 넘기는 Task"""
+
     @task
     def pick_event_file(ds_nodash: str) -> str:
         hook = S3Hook("aws_default")
@@ -121,9 +122,10 @@ def event_data_pipeline_with_glue():
         table = "source.source_event"
         redshift.run("BEGIN;")
         # redshift 중복 적재 방지
+        # update 조건 created_at > observed_at
         redshift.run(f"""
             DELETE FROM {table}
-            WHERE created_at::date = '{ds}';
+            WHERE observed_at = '{ds_nodash}';
         """)
         redshift.run(f"""
             COPY {table} (
