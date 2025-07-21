@@ -26,10 +26,9 @@ def get_s3_client(conn_id="aws_conn_id"):
     return s3_hook.get_conn()
 
 
-def read_from_s3(bucket_name: str, key: str, conn_id="aws_conn_id"):
+def read_from_s3(s3_client, bucket_name: str, key: str):
     """지정한 S3 버킷과 키에 해당하는 객체를 문자열로 반환"""
-    s3 = get_s3_client(conn_id)
-    response = s3.get_object(Bucket=bucket_name, Key=key)
+    response = s3_client.get_object(Bucket=bucket_name, Key=key)
     return response["Body"].read().decode("utf-8")
 
 
@@ -65,7 +64,7 @@ def upload_processed_history_to_s3(
     dag_id="dag_population",
     schedule="*/5 * * * *",
     start_date=pendulum.datetime(2025, 7, 3, 0, 5, tz="Asia/Seoul"),
-    docs_md=textwrap.dedent("""
+    doc_md=textwrap.dedent("""
         - **추출 및 변환**: S3에서 raw json 데이터를 추출, 변환하고 중복 처리
         - **Parquet 업로드**: 처리된 데이터는 Parquet 파일로 S3에 업로드
         - **Redshift 적재**: S3의 Parquet 파일을 Redshift 테이블에 적재
@@ -81,16 +80,16 @@ def population_data_pipeline():
         S3에 최근 5분 동안 수집된 raw json 데이터에서 인구 데이터 추출
         - ex) logical_date가 20:10이면 20:05~09 사이에 수집된 raw json 탐색
         """
-        logical_date = context["logical_date"]
+        logical_date_utc = context["logical_date"]
 
-        process_start_time = logical_date
+        process_start_time_kst = logical_date_utc.in_timezone("Asia/Seoul")
 
         s3 = get_s3_client()
         files_to_process = []
 
         # 5분 내의 생성된 데이터 prefix 생성 후 실제 존재하는 것만 가져옴
         for i in range(5):
-            file_time = process_start_time.subtract(minutes=(5 - i))
+            file_time = process_start_time_kst.subtract(minutes=(5 - i))
 
             s3_prefix_date_path = file_time.strftime("%Y%m%d")
             s3_prefix_time_name = file_time.strftime("%H%M")
@@ -102,7 +101,7 @@ def population_data_pipeline():
                 file_key = obj["Key"]
 
                 try:
-                    raw_json = read_from_s3(S3_BUCKET_NAME, file_key)
+                    raw_json = read_from_s3(s3, S3_BUCKET_NAME, file_key)
                     raw_data = json.loads(raw_json)
 
                     citydata = raw_data.get("LIVE_PPLTN_STTS", [])
@@ -386,7 +385,7 @@ def population_data_pipeline():
         return merged_key
 
     @task
-    def load_to_redshift(merged_key: List[str]):
+    def load_to_redshift(merged_key: List[str], **context):
         if not merged_key:
             """
             5분 사이 수집된 모든 json이 이미 처리됐으면 parquet으로 변환할 것이 없으므로 merged_key는 빈 리스트임
@@ -400,6 +399,8 @@ def population_data_pipeline():
         hook = RedshiftSQLHook(redshift_conn_id="redshift_dev_db")
         source_table = "source.source_population"
 
+        hook.run("BEGIN")
+
         copy_sql = f"""
             COPY {source_table}
             FROM 's3://{S3_BUCKET_NAME}/{merged_key}'
@@ -408,6 +409,7 @@ def population_data_pipeline():
         """
 
         hook.run(copy_sql)
+        hook.run("COMMIT")
 
     run_dbt = BashOperator(
         task_id="run_dbt",
