@@ -7,14 +7,7 @@ from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.operators.bash import BashOperator
 
 import logging
-import hashlib
-import json
-from io import BytesIO
-import decimal
 
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 log = logging.getLogger(__name__)
 
@@ -30,15 +23,15 @@ DBT_PROJECT_DIR = Variable.get("DBT_PROJECT_DIR")
 
 @dag(
     dag_id="commercial_data_backfill_night",
-    schedule="32 9 * * *", 
-    start_date=pendulum.datetime(2025, 7, 4, tz="Asia/Seoul"), 
+    schedule="32 9 * * *",
+    start_date=pendulum.datetime(2025, 7, 4, tz="Asia/Seoul"),
     catchup=False,
     tags=["night", "glue", "commercial"],
 )
 def commercial_data_backfill_night():
     run_glue_job = GlueJobOperator(
         task_id="run_glue_backfill_night",
-        job_name="de6-team1-glue-commercial-backfill-night", 
+        job_name="de6-team1-glue-commercial-backfill-night",
         replace_script_file=True,
         script_args={
             "--logical_date": "{{ logical_date }}",
@@ -55,8 +48,12 @@ def commercial_data_backfill_night():
         ds_nodash = context["ds_nodash"]
 
         commercial_table_name = "source.source_commercial"
-        commercial_parquet_path = f"s3://de6-team1-bucket/processed-data/commercial/{ds_nodash}/night/"
-        rsb_parquet_path = f"s3://de6-team1-bucket/processed-data/commercial_rsb/{ds_nodash}/night/"
+        commercial_parquet_path = (
+            f"s3://de6-team1-bucket/processed-data/commercial/{ds_nodash}/night/"
+        )
+        rsb_parquet_path = (
+            f"s3://de6-team1-bucket/processed-data/commercial_rsb/{ds_nodash}/night/"
+        )
 
         copy_commercial_sql = f"""
             COPY {commercial_table_name} (
@@ -74,7 +71,7 @@ def commercial_data_backfill_night():
         redshift_hook.run(copy_commercial_sql)
 
         rsb_table_name = "source.source_commercial_rsb"
-        
+
         copy_rsb_sql = f"""
         COPY {rsb_table_name} (
             source_id, category_large, category_medium, category_congestion_level,
@@ -95,5 +92,4 @@ def commercial_data_backfill_night():
     run_glue_job >> load_to_redshift() >> run_dbt
 
 
-commercial_data_backfill_night()    
-
+commercial_data_backfill_night()
