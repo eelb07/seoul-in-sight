@@ -1,14 +1,40 @@
 version: 2
 
 sources:
-  - name: raw
+  - name: raw_commercial_data 
+    description: "서울시 상권 데이터 원본 소스"
+    schema: source           
+    tables:
+      - name: commercial     
+        description: "상권 일반 데이터"
+        identifier: source_commercial 
+        loaded_at_field: created_at 
+      - name: commercial_rsb  
+        description: "상권 카테고리별 데이터"
+        identifier: source_commercial_rsb
+        loaded_at_field: created_at 
+  - name: raw_transport
     schema: source
     tables:
-      - name: event
-        identifier: source_event
-
+      - name: bus
+        identifier: source_bus
+        loaded_at_field: created_at
+      - name: subway
+        identifier: source_subway
+        loaded_at_field: created_at
   - name: dim_data
     schema: dim
     tables:
+      - name: category
+        identifier: dim_category 
       - name: area
         identifier: dim_area
+  - name: raw
+    schema: source
+    tables:
+      - name: population
+        identifier: source_population
+      - name: event
+        identifier: source_event
+      - name: weather
+        identifier: source_weather

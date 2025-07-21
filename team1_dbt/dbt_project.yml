@@ -31,6 +31,13 @@ clean-targets:         # directories to be removed by `dbt clean`
 # files using the `{{ config(...) }}` macro.
 models:
   team1_dbt:
+    +materialized: view
+
     # Config indicated by + and applies to all files under models/example/
-    example:
-      +materialized: view
+    staging:
+      +materialized: ephemeral
+      +schema: source
+    fact:
+      +materialized: incremental
+      +schema: fact
+      +tags: ['fact']
