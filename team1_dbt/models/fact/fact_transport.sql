@@ -77,7 +77,7 @@ unioned as (
 
 final_fact as (
     select
-        source_id || '-' || transport_type as fact_transport_id,
+        to_char(observed_at, 'YYYYMMDDHH24MI') || '-' || area_code || '-' || transport_type AS fact_transport_id
         transport_type,
         station_count_basis_month,
         total_geton_population_min,
