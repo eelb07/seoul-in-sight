@@ -33,11 +33,11 @@ models:
   team1_dbt:
     +materialized: view
 
+    # Config indicated by + and applies to all files under models/example/
     staging:
-      +schema: "staging"
-      +materialized: view
-    
+      +materialized: ephemeral
+      +schema: source
     fact:
-      +schema: "fact" 
-      +materialized: incremental 
+      +materialized: incremental
+      +schema: fact
       +tags: ['fact']
