@@ -60,42 +60,15 @@ def enforce_schema(df):
         if col in df.columns:
             if dtype == "int32":
                 df[col] = df[col].fillna(0).astype(dtype)
-                continue
-            df[col] = df[col].fillna(0).astype(dtype)
+            elif dtype.startswith("datetime"):
+                df[col] = pd.to_datetime(df[col], errors="coerce").astype(dtype)
+            else:
+                df[col] = df[col].fillna("").astype(dtype)
     return df
 
 
 def transform_json_to_df(json_list, TRANSPORT_TYPE):
-    df = pd.DataFrame(json_list)
-
-    rename_map = {
-        f"{TRANSPORT_TYPE}_ACML_GTON_PPLTN_MIN": "total_geton_population_min",
-        f"{TRANSPORT_TYPE}_ACML_GTON_PPLTN_MAX": "total_geton_population_max",
-        f"{TRANSPORT_TYPE}_ACML_GTOFF_PPLTN_MIN": "total_getoff_population_min",
-        f"{TRANSPORT_TYPE}_ACML_GTOFF_PPLTN_MAX": "total_getoff_population_max",
-        f"{TRANSPORT_TYPE}_30WTHN_GTON_PPLTN_MIN": "geton_30min_population_min",
-        f"{TRANSPORT_TYPE}_30WTHN_GTON_PPLTN_MAX": "geton_30min_population_max",
-        f"{TRANSPORT_TYPE}_30WTHN_GTOFF_PPLTN_MIN": "getoff_30min_population_min",
-        f"{TRANSPORT_TYPE}_30WTHN_GTOFF_PPLTN_MAX": "getoff_30min_population_max",
-        f"{TRANSPORT_TYPE}_10WTHN_GTON_PPLTN_MIN": "geton_10min_population_min",
-        f"{TRANSPORT_TYPE}_10WTHN_GTON_PPLTN_MAX": "geton_10min_population_max",
-        f"{TRANSPORT_TYPE}_10WTHN_GTOFF_PPLTN_MIN": "getoff_10min_population_min",
-        f"{TRANSPORT_TYPE}_10WTHN_GTOFF_PPLTN_MAX": "getoff_10min_population_max",
-        f"{TRANSPORT_TYPE}_5WTHN_GTON_PPLTN_MIN": "geton_5min_population_min",
-        f"{TRANSPORT_TYPE}_5WTHN_GTON_PPLTN_MAX": "geton_5min_population_max",
-        f"{TRANSPORT_TYPE}_5WTHN_GTOFF_PPLTN_MIN": "getoff_5min_population_min",
-        f"{TRANSPORT_TYPE}_5WTHN_GTOFF_PPLTN_MAX": "getoff_5min_population_max",
-        f"{TRANSPORT_TYPE}_STN_CNT": "station_count",
-        f"{TRANSPORT_TYPE}_STN_TIME": "station_count_basis_month",
-    }
-    df = df.rename(columns=rename_map)
-    df["station_count_basis_month"] = pd.to_datetime(
-        df["station_count_basis_month"], format="%Y%m%d"
-    ).dt.date
-    df["created_at"] = pendulum.now("Asia/Seoul").strftime("%Y-%m-%d %H:%M:%S")
-    df["area_code"] = df["area_code"].fillna("").astype(str).str.strip()
-
-    order_columns = [
+    ordered_columns = [
         "area_code",
         "area_name",
         "total_geton_population_min",
@@ -119,8 +92,40 @@ def transform_json_to_df(json_list, TRANSPORT_TYPE):
         "created_at",
         "observed_at",
     ]
-    df = df[order_columns]
-    return df
+    if len(json_list) == 0:
+        log.warning(f"NO VALID {TRANSPORT_TYPE} JSON")
+        empty_df = pd.DataFrame(columns=ordered_columns)
+        return empty_df
+
+    else:
+        df = pd.DataFrame(json_list)
+
+        rename_map = {
+            f"{TRANSPORT_TYPE}_ACML_GTON_PPLTN_MIN": "total_geton_population_min",
+            f"{TRANSPORT_TYPE}_ACML_GTON_PPLTN_MAX": "total_geton_population_max",
+            f"{TRANSPORT_TYPE}_ACML_GTOFF_PPLTN_MIN": "total_getoff_population_min",
+            f"{TRANSPORT_TYPE}_ACML_GTOFF_PPLTN_MAX": "total_getoff_population_max",
+            f"{TRANSPORT_TYPE}_30WTHN_GTON_PPLTN_MIN": "geton_30min_population_min",
+            f"{TRANSPORT_TYPE}_30WTHN_GTON_PPLTN_MAX": "geton_30min_population_max",
+            f"{TRANSPORT_TYPE}_30WTHN_GTOFF_PPLTN_MIN": "getoff_30min_population_min",
+            f"{TRANSPORT_TYPE}_30WTHN_GTOFF_PPLTN_MAX": "getoff_30min_population_max",
+            f"{TRANSPORT_TYPE}_10WTHN_GTON_PPLTN_MIN": "geton_10min_population_min",
+            f"{TRANSPORT_TYPE}_10WTHN_GTON_PPLTN_MAX": "geton_10min_population_max",
+            f"{TRANSPORT_TYPE}_10WTHN_GTOFF_PPLTN_MIN": "getoff_10min_population_min",
+            f"{TRANSPORT_TYPE}_10WTHN_GTOFF_PPLTN_MAX": "getoff_10min_population_max",
+            f"{TRANSPORT_TYPE}_5WTHN_GTON_PPLTN_MIN": "geton_5min_population_min",
+            f"{TRANSPORT_TYPE}_5WTHN_GTON_PPLTN_MAX": "geton_5min_population_max",
+            f"{TRANSPORT_TYPE}_5WTHN_GTOFF_PPLTN_MIN": "getoff_5min_population_min",
+            f"{TRANSPORT_TYPE}_5WTHN_GTOFF_PPLTN_MAX": "getoff_5min_population_max",
+            f"{TRANSPORT_TYPE}_STN_CNT": "station_count",
+            f"{TRANSPORT_TYPE}_STN_TIME": "station_count_basis_month",
+        }
+        df = df.rename(columns=rename_map)
+        df["created_at"] = pendulum.now("Asia/Seoul").strftime("%Y-%m-%d %H:%M:%S")
+        df["area_code"] = df["area_code"].fillna("").astype(str).str.strip()
+        df = df[ordered_columns]
+
+        return df
 
 
 # -------------------
@@ -229,6 +234,10 @@ def transport_data_pipeline():
 
     @task
     def load_to_redshift(path, **context):
+        """
+        S3 의 processed-data 안의 .parquet 를 redshift 에 적재.
+        빈 parquet 는 아무 데이터도 적재하지 않음.
+        """
         S3_BUS_PATH = path["bus"]
         S3_SUBWAY_PATH = path["subway"]
 
