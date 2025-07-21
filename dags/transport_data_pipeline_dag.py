@@ -131,7 +131,7 @@ kst = pendulum.timezone("Asia/Seoul")
 
 @dag(
     dag_id="dag_transport",
-    schedule="*/5 * * * *",
+    schedule="*/5 9-21 * * *",
     start_date=pendulum.datetime(2025, 7, 8, tz="Asia/Seoul"),
     catchup=False,
     tags=["s3", "parquet"],
@@ -180,17 +180,20 @@ def transport_data_pipeline():
             ).strftime("%Y-%m-%d %H:%M:%S")
 
             subway = data["LIVE_SUB_PPLTN"]
-            subway["area_name"] = data["AREA_NM"]
-            subway["area_code"] = data["AREA_CD"]
-            subway["observed_at"] = observed_at
+            if subway["SUB_STN_TIME"] is not None:
+                subway["area_name"] = data["AREA_NM"]
+                subway["area_code"] = data["AREA_CD"]
+                subway["observed_at"] = observed_at
+
+                subway_json_list.append(subway)
 
             bus = data["LIVE_BUS_PPLTN"]
-            bus["area_name"] = data["AREA_NM"]
-            bus["area_code"] = data["AREA_CD"]
-            bus["observed_at"] = observed_at
+            if bus["BUS_STN_TIME"] is not None:
+                bus["area_name"] = data["AREA_NM"]
+                bus["area_code"] = data["AREA_CD"]
+                bus["observed_at"] = observed_at
 
-            subway_json_list.append(subway)
-            bus_json_list.append(bus)
+                bus_json_list.append(bus)
 
         # Transform
         subway_df = transform_json_to_df(subway_json_list, "SUB")
