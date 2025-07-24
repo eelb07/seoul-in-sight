@@ -8,7 +8,7 @@
 WITH stg_population AS (
 
     SELECT
-		source_id,
+	source_id,
         area_code,
         area_name,
         congestion_label,
@@ -32,8 +32,7 @@ WITH stg_population AS (
     FROM {{ ref('stg_population') }}
 
     {% if is_incremental() %}
-		WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
-
+	WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
     {% endif %}
 
 ),
@@ -42,7 +41,7 @@ WITH stg_population AS (
 final_fact AS (
 
     SELECT
-		source_id AS fact_population_id,
+	source_id AS fact_population_id,
         population_min,
         population_max,
         male_population_ratio,
@@ -66,8 +65,8 @@ final_fact AS (
     FROM stg_population sp
     LEFT JOIN dim.dim_congestion dc
         ON sp.congestion_label = dc.congestion_label
-	LEFT JOIN dim.dim_area da
-		ON sp.area_code = da.area_code
+    LEFT JOIN dim.dim_area da
+	ON sp.area_code = da.area_code
 )
 
 SELECT * FROM final_fact
