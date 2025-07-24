@@ -284,10 +284,25 @@ def population_data_pipeline():
                     continue
                 else:
                     raise
+        now_ts = pendulum.now("Asia/Seoul").format("YYYYMMDD_HHmmss")
+        source_key = f"staging/population/population_{now_ts}.json"
+        processed_key = f"staging/population/processed_observed_{now_ts}.json"
+        s3.put_object(
+            Bucket=S3_BUCKET_NAME,
+            Key=source_key,
+            Body=json.dumps(source_population_data, ensure_ascii=False).encode("utf-8"),
+        )
+        s3.put_object(
+            Bucket=S3_BUCKET_NAME,
+            Key=processed_key,
+            Body=json.dumps(processed_observed_at_dict, ensure_ascii=False).encode(
+                "utf-8"
+            ),
+        )
 
         return {
-            "source_population_data": source_population_data,
-            "processed_observed_at_dict": processed_observed_at_dict,
+            "source_population_data": source_key,
+            "processed_observed_at_dict": processed_key,
         }
 
     @task
@@ -295,7 +310,15 @@ def population_data_pipeline():
         """
         이전 task에서 처리된 이력이 없는 데이터들은 Parquet으로 변환
         """
-        source_population_data = result.get("source_population_data", [])
+        s3 = get_s3_client()
+
+        source_key = result["source_population_data"]
+        processed_key = result["processed_observed_at_dict"]
+
+        source_json = read_from_s3(s3, S3_BUCKET_NAME, source_key)
+        processed_json = read_from_s3(s3, S3_BUCKET_NAME, processed_key)
+
+        source_population_data = json.loads(source_json)
 
         if not source_population_data:
             logger.info("no population data")
@@ -369,6 +392,8 @@ def population_data_pipeline():
             f"✅ population parquet 파일을 저장했습니다: s3://{S3_BUCKET_NAME}/{merged_key}"
         )
 
+        processed_observed_at_dict = json.loads(processed_json)
+
         # 처리 어력 업데이트 후 S3에 덮어쓰기
         processed_history_s3_key = "processed_history/population.json"
         try:
@@ -376,7 +401,7 @@ def population_data_pipeline():
                 s3_client=s3,
                 bucket_name=S3_BUCKET_NAME,
                 s3_key=processed_history_s3_key,
-                processed_history_data=result["processed_observed_at_dict"],
+                processed_history_data=processed_observed_at_dict,
             )
         except Exception as e:
             logger.info(f"❌ 최종 처리 이력 업로드 중 오류 발생: {e}")
