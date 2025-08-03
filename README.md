@@ -93,10 +93,9 @@
 
 <br><br>
 
-
 ## Architecture
 
-<img src="./assets/architecture.png" width="1200" />
+<img width="1200" alt="Image" src="https://github.com/user-attachments/assets/87e53d68-2f11-4ffd-a017-e73262debe5a" />
 
 
 
@@ -104,4 +103,4 @@
 
 ## ERD
 
-<img src="./assets/erd.png" width="1200" />
+<img width="1200" alt="Image" src="https://github.com/user-attachments/assets/93fdfc53-e0ff-4272-8e78-0bf131b00c76" />
