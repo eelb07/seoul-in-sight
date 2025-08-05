@@ -49,13 +49,12 @@
 
 ## Dashboard
 
-
 <table style="min-width: 100%; max-width: 830px; border-collapse: collapse; margin: 0 auto;">
 
   <!-- 실시간 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="https://github.com/user-attachments/assets/837775de-09d5-442c-b38d-7cba1472b7cc" width=780 alt="실시간 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/816aae89-953d-4876-a284-6e03e9c1058b" width=780 alt="실시간 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 실시간</strong><br>
         실시간 탭은 82개 핫스팟이 위치한 "서울"의 <br>
@@ -67,7 +66,7 @@
   <!-- 주간 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="https://github.com/user-attachments/assets/80a77038-3d45-4acf-81ad-81863d6d564d" width=780 alt="주간 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/72cecba0-a939-4601-b773-af8c4c2d48ce" width=780 alt="주간 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 주간</strong><br>
         사용자가 드롭다운 리스트에서 특정 장소를 선택하면<br>
@@ -79,7 +78,7 @@
   <!-- 인사이트 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="https://github.com/user-attachments/assets/4177f87a-7a2e-4e00-b773-562a6b9ca6b1" width=780 alt="인사이트 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/ae729624-85ef-4da2-9f73-691492167e9c" width=780 alt="인사이트 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 인사이트</strong><br>
         사용자가 필터 조건을 직접 구성하여<br>
