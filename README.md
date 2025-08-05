@@ -68,7 +68,7 @@
   <!-- 주간 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="./assets/dashboard/weekly.gif" width=780 alt="주간 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/80a77038-3d45-4acf-81ad-81863d6d564d" width=780 alt="주간 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 주간</strong><br>
         사용자가 드롭다운 리스트에서 특정 장소를 선택하면<br>
