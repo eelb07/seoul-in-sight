@@ -50,13 +50,12 @@
 ## Dashboard
 
 
-
 <table style="min-width: 100%; max-width: 830px; border-collapse: collapse; margin: 0 auto;">
 
   <!-- 실시간 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="./assets/dashboard/live.gif" width=780 alt="실시간 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/837775de-09d5-442c-b38d-7cba1472b7cc" width=780 alt="실시간 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 실시간</strong><br>
         실시간 탭은 82개 핫스팟이 위치한 "서울"의 <br>
@@ -80,7 +79,7 @@
   <!-- 인사이트 탭 -->
   <tr>
     <td align="center" valign="top" style="padding: 20px;">
-      <img src="./assets/dashboard/insight.gif" width=780 alt="인사이트 탭 이미지" /><br><br>
+      <img src="https://github.com/user-attachments/assets/4177f87a-7a2e-4e00-b773-562a6b9ca6b1" width=780 alt="인사이트 탭 이미지" /><br><br>
       <p style="max-width: 600px; margin: 0 auto;">
         <strong>✅ 인사이트</strong><br>
         사용자가 필터 조건을 직접 구성하여<br>
