@@ -1,0 +1,52 @@
+WITH
+  CURR_POP AS (
+    SELECT
+      FP.AREA_ID,
+      FP.TIME_KEY,
+      FP.POPULATION_MAX
+    FROM
+      FACT.FACT_POPULATION FP
+    WHERE
+      FP.TIME_KEY = (
+        SELECT
+          MAX(TIME_KEY)
+        FROM
+          FACT.FACT_POPULATION
+      )
+  ),
+  PREV_POP AS (
+    SELECT
+      FP.AREA_ID,
+      FP.TIME_KEY,
+      FP.POPULATION_MAX
+    FROM
+      FACT.FACT_POPULATION FP
+    WHERE
+      TO_TIMESTAMP(TIME_KEY::TEXT, 'YYYYMMDDHH24MI') = (
+        SELECT
+          MAX(TO_TIMESTAMP(TIME_KEY::TEXT, 'YYYYMMDDHH24MI')) - INTERVAL '24 HOURS'
+        FROM
+          FACT.FACT_POPULATION
+      )
+  )
+SELECT
+  DA.AREA_NAME AS "지역명",
+  PP.POPULATION_MAX AS "24시간 전 인구",
+  CP.POPULATION_MAX AS "현재 인구",
+  -- 인구 변화량 비율 계산: (현재 인구 - 24시간 전 인구) / 24시간 전 인구 * 100
+  -- 24시간 전 인구가 0일 경우 NULLIF를 사용하여 0으로 나누는 오류를 방지하고 NULL 처리
+  -- 결과는 DECIMAL 타입으로 캐스팅하여 소수점 표현
+  ROUND(
+    (
+      (CP.POPULATION_MAX - PP.POPULATION_MAX)::DECIMAL / NULLIF(PP.POPULATION_MAX, 0) * 100
+    ),
+    1
+  ) AS "인구변화율 (%)"
+FROM
+  CURR_POP CP
+  LEFT JOIN PREV_POP PP ON CP.AREA_ID = PP.AREA_ID
+  JOIN DIM.DIM_AREA DA ON DA.AREA_ID = CP.AREA_ID
+ORDER BY
+  (CP.POPULATION_MAX - PP.POPULATION_MAX)::DECIMAL / NULLIF(PP.POPULATION_MAX, 0) ASC
+LIMIT
+  8;
